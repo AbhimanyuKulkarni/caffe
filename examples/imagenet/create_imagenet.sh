@@ -6,8 +6,12 @@ EXAMPLE=examples/imagenet
 DATA=data/ilsvrc12
 TOOLS=build/tools
 
-TRAIN_DATA_ROOT=/path/to/imagenet/train/
-VAL_DATA_ROOT=/path/to/imagenet/val/
+DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/ILSVRC2012_sample_10_5
+
+TRAIN_DATA_ROOT=$DATA_ROOT/sample_10_train/
+TRAIN_DATA_LIST=$DATA_ROOT/sample_10_train.txt
+VAL_DATA_ROOT=$DATA_ROOT/sample_5_val/
+VAL_DATA_LIST=$DATA_ROOT/sample_5_val.txt
 
 # Set RESIZE=true to resize the images to 256x256. Leave as false if images have
 # already been resized using another tool.
@@ -41,7 +45,7 @@ GLOG_logtostderr=1 $TOOLS/convert_imageset \
     --resize_width=$RESIZE_WIDTH \
     --shuffle \
     $TRAIN_DATA_ROOT \
-    $DATA/train.txt \
+    $TRAIN_DATA_LIST \
     $EXAMPLE/ilsvrc12_train_lmdb
 
 echo "Creating val lmdb..."
@@ -51,7 +55,7 @@ GLOG_logtostderr=1 $TOOLS/convert_imageset \
     --resize_width=$RESIZE_WIDTH \
     --shuffle \
     $VAL_DATA_ROOT \
-    $DATA/val.txt \
+    $VAL_DATA_LIST \
     $EXAMPLE/ilsvrc12_val_lmdb
 
 echo "Done."
