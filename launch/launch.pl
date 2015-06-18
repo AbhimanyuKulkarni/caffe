@@ -45,8 +45,8 @@ $param = "";
 
 $net = "googlenet";
 $net = "nin_imagenet";
-$net = "alexnet";
 $net = "convnet";
+$net = "alexnet";
 $net = "lenet";
 
 $iters = 1;
@@ -95,7 +95,7 @@ open($fh, ">batch-job.submit") or die "could not open batch-job.submit for writi
 print $fh <<'END_MSG';
 Universe = vanilla
 Getenv = True
-Requirements = (Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform )
+Requirements = (Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform ) && ( RemoteHost == "aenao-26.eecg.toronto.edu" )
 Executable = run.sh
 Output = stdout
 Error = stderr

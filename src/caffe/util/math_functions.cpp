@@ -315,6 +315,51 @@ void caffe_rng_bernoulli<double>(const int n, const double p, unsigned int* r);
 template
 void caffe_rng_bernoulli<float>(const int n, const float p, unsigned int* r);
 
+// Patrick: added exponential and lognormal
+template <typename Dtype>
+void caffe_rng_exponential(const int n, const Dtype a, Dtype* r) {
+  CHECK_GE(n, 0);
+  CHECK(r);
+  CHECK_GT(a, 0);
+  boost::exponential_distribution<Dtype> random_distribution(a);
+  boost::variate_generator<caffe::rng_t*, boost::exponential_distribution<Dtype> >
+      variate_generator(caffe_rng(), random_distribution);
+  for (int i = 0; i < n; ++i) {
+    r[i] = variate_generator();
+  }
+}
+
+template
+void caffe_rng_exponential<float>(const int n, const float mu,
+                               float* r);
+
+template
+void caffe_rng_exponential<double>(const int n, const double mu,
+                                double* r);
+
+template <typename Dtype>
+void caffe_rng_lognormal(const int n, const Dtype a,
+                        const Dtype sigma, Dtype* r) {
+  CHECK_GE(n, 0);
+  CHECK(r);
+  CHECK_GT(sigma, 0);
+  boost::lognormal_distribution<Dtype> random_distribution(a, sigma);
+  boost::variate_generator<caffe::rng_t*, boost::lognormal_distribution<Dtype> >
+      variate_generator(caffe_rng(), random_distribution);
+  for (int i = 0; i < n; ++i) {
+    r[i] = variate_generator();
+  }
+}
+
+template
+void caffe_rng_lognormal<float>(const int n, const float mu,
+                               const float sigma, float* r);
+
+template
+void caffe_rng_lognormal<double>(const int n, const double mu,
+                                const double sigma, double* r);
+// end Patrick
+
 template <>
 float caffe_cpu_strided_dot<float>(const int n, const float* x, const int incx,
     const float* y, const int incy) {

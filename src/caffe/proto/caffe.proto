@@ -267,7 +267,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 134 (last added: reshape_param)
+// LayerParameter next available layer-specific ID: 140 (last added: reshape_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -346,6 +346,14 @@ message LayerParameter {
   optional TanHParameter tanh_param = 127;
   optional ThresholdParameter threshold_param = 128;
   optional WindowDataParameter window_data_param = 129;
+
+  // Patrick: added output error for each layers
+  optional float error = 134 [default = 0.0];
+  optional uint32 error_type = 135 [default = 0];
+  optional uint32 max_data_mag = 136;
+  optional uint32 data_precision = 137;
+  optional uint32 max_weight_mag = 138;
+  optional uint32 weight_precision = 139;
 }
 
 // Message that stores parameters used to apply transformation

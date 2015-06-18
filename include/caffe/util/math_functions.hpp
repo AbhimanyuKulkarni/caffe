@@ -85,6 +85,14 @@ void caffe_rng_bernoulli(const int n, const Dtype p, int* r);
 template <typename Dtype>
 void caffe_rng_bernoulli(const int n, const Dtype p, unsigned int* r);
 
+// Patrick: added lognormal and exponential
+template <typename Dtype>
+void caffe_rng_exponential(const int n, const Dtype mu, Dtype* r);
+
+template <typename Dtype>
+void caffe_rng_lognormal(const int n, const Dtype mu, const Dtype sigma, Dtype* r);
+// end Patrick
+
 template <typename Dtype>
 void caffe_exp(const int n, const Dtype* a, Dtype* y);
 

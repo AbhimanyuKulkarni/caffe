@@ -11,6 +11,9 @@
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/device_alternate.hpp"
 
+//Patrick: Approximator class for injecting error
+#include "caffe/util/error.hpp"
+
 namespace caffe {
 
 /**
@@ -300,6 +303,10 @@ class Layer {
    *  the objective function. */
   vector<Dtype> loss_;
 
+  /** Patrick: class to perform all approximations at the layer boundary 
+   *  and collect statsistics */
+  Approximator<Dtype> approximator_;
+  
   /** @brief Using the CPU device, compute the layer output. */
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) = 0;
@@ -409,7 +416,11 @@ inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
   Reshape(bottom, top);
   switch (Caffe::mode()) {
   case Caffe::CPU:
+    
+    approximator_.pre_layer(bottom, top, this->blobs_, this->layer_param_);
     Forward_cpu(bottom, top);
+    
+    
     for (int top_id = 0; top_id < top.size(); ++top_id) {
       if (!this->loss(top_id)) { continue; }
       const int count = top[top_id]->count();
