@@ -1,0 +1,12 @@
+conv1,relu0
+cccp1,relu1
+cccp2,relu2,pool0
+conv2,relu3
+cccp3,relu5
+cccp4,relu6,pool2
+conv3,relu7
+cccp5,relu8
+cccp6,relu9,pool3,drop
+conv4-1024,relu10
+cccp7-1024,relu11
+cccp8-1024,relu12,pool4

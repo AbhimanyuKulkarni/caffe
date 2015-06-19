@@ -1,0 +1,7 @@
+convnet-baseline-1/layer_all--00/stderr
+layer, data, weights
+0, 9318400,2400
+1, 4300800,25600
+2, 1945600,51200
+3, 108800,65536
+4, 7400,640

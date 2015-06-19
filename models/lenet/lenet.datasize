@@ -1,0 +1,6 @@
+lenet-baseline-1/layer_all--00/stderr
+layer, data, weights
+0, 2670400,500
+1, 1008000,25000
+2, 230000,400000
+3, 51000,5000
