@@ -879,7 +879,7 @@ layers {
   name: "loss1/top-5"
   type: ACCURACY
   accuracy_param {
-    top_k: 5
+    top_k: 1
   }
   include {
     phase: TEST
@@ -1579,7 +1579,7 @@ layers {
   name: "loss2/top-5"
   type: ACCURACY
   accuracy_param {
-    top_k: 5
+    top_k: 1
   }
   include {
     phase: TEST
@@ -2234,7 +2234,7 @@ layers {
   name: "loss3/top-5"
   type: ACCURACY
   accuracy_param {
-    top_k: 5
+    top_k: 1
   }
   include {
     phase: TEST

@@ -1,0 +1,15 @@
+for vgg_cnn_s I want a train_val.prototxt
+
+deploy is used for generating predictions, train_val can be used for both (train and validation)
+
+comparing for alexnet
+  deploy:
+    no data layers?
+    no layer params for training:
+      lr_mult
+      decay_mult
+      weight_filler
+      bias_filler
+    last layer is Softmax instead of SoftmaxWithLoss
+    no accuracy layer
+
