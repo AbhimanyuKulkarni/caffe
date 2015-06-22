@@ -6,8 +6,8 @@ EXAMPLE=examples/imagenet
 DATA=data/ilsvrc12
 TOOLS=build/tools
 
-TRAIN_DATA_ROOT=/media/patrick/data/deep-learning/datasets/imagenet5000_1/sample_10_train/
-VAL_DATA_ROOT=/media/patrick/data/deep-learning/datasets/imagenet5000_1/sample_5_val/
+TRAIN_DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/set1/ILSVRC2012_sample_10_5/sample_10_train/
+VAL_DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/set1/ILSVRC2012_sample_10_5/sample_5_val/
 
 # Set RESIZE=true to resize the images to 256x256. Leave as false if images have
 # already been resized using another tool.
