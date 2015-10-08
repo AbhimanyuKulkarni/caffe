@@ -1,9 +1,9 @@
 name: "nin_imagenet"
-layers {
+layer {
   top: "data"
   top: "label"
   name: "data"
-  type: DATA
+  type: "Data"
   data_param {
     source: "examples/imagenet/ilsvrc12_train_lmdb"
     backend: LMDB
@@ -16,11 +16,11 @@ layers {
   }
   include: { phase: TRAIN }
 }
-layers {
+layer {
   top: "data"
   top: "label"
   name: "data"
-  type: DATA
+  type: "Data"
   data_param {
     source: "examples/imagenet/ilsvrc12_val_lmdb"
     backend: LMDB
@@ -33,15 +33,15 @@ layers {
   }
   include: { phase: TEST }
 }
-layers {
+layer {
   bottom: "data"
   top: "conv1"
   name: "conv1"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 96
     kernel_size: 11
@@ -57,21 +57,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "conv1"
   top: "conv1"
   name: "relu0"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "conv1"
   top: "cccp1"
   name: "cccp1"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 96
     kernel_size: 1
@@ -87,21 +87,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp1"
   top: "cccp1"
   name: "relu1"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp1"
   top: "cccp2"
   name: "cccp2"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 96
     kernel_size: 1
@@ -117,32 +117,32 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp2"
   top: "cccp2"
   name: "relu2"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp2"
   top: "pool0"
   name: "pool0"
-  type: POOLING
+  type: "Pooling"
   pooling_param {
     pool: MAX
     kernel_size: 3
     stride: 2
   }
 }
-layers {
+layer {
   bottom: "pool0"
   top: "conv2"
   name: "conv2"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 256
     pad: 2
@@ -159,21 +159,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "conv2"
   top: "conv2"
   name: "relu3"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "conv2"
   top: "cccp3"
   name: "cccp3"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 256
     kernel_size: 1
@@ -189,21 +189,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp3"
   top: "cccp3"
   name: "relu5"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp3"
   top: "cccp4"
   name: "cccp4"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 256
     kernel_size: 1
@@ -219,32 +219,32 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp4"
   top: "cccp4"
   name: "relu6"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp4"
   top: "pool2"
   name: "pool2"
-  type: POOLING
+  type: "Pooling"
   pooling_param {
     pool: MAX
     kernel_size: 3
     stride: 2
   }
 }
-layers {
+layer {
   bottom: "pool2"
   top: "conv3"
   name: "conv3"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 384
     pad: 1
@@ -261,21 +261,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "conv3"
   top: "conv3"
   name: "relu7"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "conv3"
   top: "cccp5"
   name: "cccp5"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 384
     kernel_size: 1
@@ -291,21 +291,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp5"
   top: "cccp5"
   name: "relu8"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp5"
   top: "cccp6"
   name: "cccp6"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 384
     kernel_size: 1
@@ -321,41 +321,41 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp6"
   top: "cccp6"
   name: "relu9"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp6"
   top: "pool3"
   name: "pool3"
-  type: POOLING
+  type: "Pooling"
   pooling_param {
     pool: MAX
     kernel_size: 3
     stride: 2
   }
 }
-layers {
+layer {
   bottom: "pool3"
   top: "pool3"
   name: "drop"
-  type: DROPOUT
+  type: "Dropout"
   dropout_param {
     dropout_ratio: 0.5
   }
 }
-layers {
+layer {
   bottom: "pool3"
   top: "conv4"
   name: "conv4-1024"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 1024
     pad: 1
@@ -372,21 +372,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "conv4"
   top: "conv4"
   name: "relu10"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "conv4"
   top: "cccp7"
   name: "cccp7-1024"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 1024
     kernel_size: 1
@@ -402,21 +402,21 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp7"
   top: "cccp7"
   name: "relu11"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp7"
   top: "cccp8"
   name: "cccp8-1024"
-  type: CONVOLUTION
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  type: "Convolution"
+
+
+
+
   convolution_param {
     num_output: 1000
     kernel_size: 1
@@ -432,35 +432,35 @@ layers {
     }
   }
 }
-layers {
+layer {
   bottom: "cccp8"
   top: "cccp8"
   name: "relu12"
-  type: RELU
+  type: "ReLU"
 }
-layers {
+layer {
   bottom: "cccp8"
   top: "pool4"
   name: "pool4"
-  type: POOLING
+  type: "Pooling"
   pooling_param {
     pool: AVE
     kernel_size: 6
     stride: 1
   }
 }
-layers {
+layer {
   name: "accuracy"
-  type: ACCURACY
+  type: "Accuracy"
   bottom: "pool4"
   bottom: "label"
   top: "accuracy"
   include: { phase: TEST }
 }
-layers {
+layer {
   bottom: "pool4"
   bottom: "label"
   name: "loss"
-  type: SOFTMAX_LOSS
+  type: "SoftmaxWithLoss"
   include: { phase: TRAIN }
 }
