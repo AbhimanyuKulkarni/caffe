@@ -14,9 +14,12 @@
 #include "caffe/util/error.hpp"
 #include "caffe/util/math_functions.hpp"
 
+<<<<<<< HEAD
 #define GEN_HISTO_ 0
 #define COUNT_DATA_ 0
 
+=======
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
 namespace caffe {
 
 enum eERROR_TYPE {
@@ -28,6 +31,7 @@ enum eERROR_TYPE {
   BITFLIP_F = 5,
 };
 
+<<<<<<< HEAD
 template <typename Dtype>
 void Approximator<Dtype>::print_stats(string name) {
   stats_.print(name.c_str());
@@ -202,11 +206,36 @@ void Approximator<Dtype>::add_error( Dtype * const in, int size, int type, Dtype
 
   if (error > 0.0) {
     CHECK_LT(error, 1);
+=======
+//extern long long int histogram[];
+
+template <typename Dtype>
+void add_error( Dtype * const in, int size) {
+
+  char * error_str = getenv("CAFFE_ERROR");
+  assert(error_str != 0);
+  Dtype error = (Dtype) atof(error_str);
+  //histogram[0]++;  
+
+  for (int i=0; i<size; i++){
+    printf ("%f\n",in[i]);
+  }
+
+  if (error > 0.0) {
+    CHECK_LT(error, 1);
+    char * error_type_str = getenv("CAFFE_ERROR_TYPE");
+    assert(error_type_str != 0);
+    eERROR_TYPE error_type = static_cast<eERROR_TYPE>(atoi(error_type_str));
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
 
     int errorSize = size; // size of error matrix should match output of gemm
     
 
+<<<<<<< HEAD
     switch (type) {
+=======
+    switch (error_type) {
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
       case NORMAL:
       case ADD_LOGNORMAL:
       case SUB_LOGNORMAL:
@@ -234,7 +263,11 @@ void Approximator<Dtype>::add_error( Dtype * const in, int size, int type, Dtype
           // generate error matrix with standard deviation = range * error
           Dtype std_dev = diff * error;
           Dtype lambda = 1.0 / std_dev;
+<<<<<<< HEAD
           switch (type) {
+=======
+          switch (error_type) {
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
             case NORMAL:
               caffe_rng_gaussian<Dtype>(errorSize, 0, std_dev, errorM); 
               caffe_add(errorSize, output_data, errorM, output_data);
@@ -252,7 +285,11 @@ void Approximator<Dtype>::add_error( Dtype * const in, int size, int type, Dtype
             case BITFLIP_F:
               // fallthrough
             default:
+<<<<<<< HEAD
               printf("Unsupported error_type %d\n", type);
+=======
+              printf("Unsupported error_type %d\n", error_type);
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
               assert(false);
               break;
           }
@@ -268,6 +305,10 @@ void Approximator<Dtype>::add_error( Dtype * const in, int size, int type, Dtype
       case BITFLIP_EF:
       case BITFLIP_F:
         {
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
           // initialize poisson RNG
           Dtype lambda = 1/error - 1;
           CHECK_GT(lambda, 0);
@@ -277,7 +318,11 @@ void Approximator<Dtype>::add_error( Dtype * const in, int size, int type, Dtype
 
           // initialize uniform RNG
           int num_bits;
+<<<<<<< HEAD
           switch (type) {
+=======
+          switch (error_type) {
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
             case BITFLIP_SEF: num_bits=32; break; 
             case BITFLIP_EF:  num_bits=31; break;
             case BITFLIP_F:   num_bits=23; break;
@@ -310,11 +355,16 @@ void Approximator<Dtype>::add_error( Dtype * const in, int size, int type, Dtype
           break;
         }
       default:
+<<<<<<< HEAD
         printf("Unknown error type: %d\n", type);
+=======
+        printf("Unknown error type: %d\n", error_type);
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
         assert(false);
         break;
     } // switch error_type
   } //if error > 0
+<<<<<<< HEAD
 }
 template
 void Approximator<float>::add_error( float * const in, int size, int type, float error);
@@ -377,4 +427,15 @@ void Approximator<float>::limit_mag_prec(float * const in, int size, int mag, in
 template 
 void Approximator<double>::limit_mag_prec(double * const in, int size, int mag, int prec );
 
+=======
+
+
+}
+
+template
+  void add_error<float>( float * const in, int size) ;
+
+template
+  void add_error<double>( double * const in, int size) ;
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
 } // namespace caffe
