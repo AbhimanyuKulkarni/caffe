@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-$launchDir = "/localhome/juddpatr/caffe_error/launch";
+$caffeDir = "/localhome/juddpatr/caffe";
 
 if ( scalar(@ARGV) < 1 ) {
   print "usage: get_accuracy.pl <run dir>\n";
@@ -16,6 +16,7 @@ while (scalar(@ARGV)){
   }
   $runDir =~ /^([^-]+)-/;
   $net = $1;
+  $launchDir = "$caffeDir/models/$net";
   $baseline = `cat $launchDir/$net.baseline`;
   $numStages = `wc -l $launchDir/$net.layers`;
 

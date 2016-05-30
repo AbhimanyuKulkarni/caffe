@@ -195,8 +195,18 @@ int test() {
       loss_msg_stream << " (* " << loss_weight
                       << " = " << loss_weight * mean_score << " loss)";
     }
-    LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
+    LOG(INFO) << "final " << output_name << " = " << mean_score << loss_msg_stream.str();
   }
+  std::cout << "Zeros per layer: ";
+  const vector<shared_ptr<Layer<float> > >& layers = caffe_net.layers();
+  for (int i = 0; i < layers.size(); ++i) {
+    const caffe::string& layername = layers[i]->layer_param().name();
+    const caffe::string& layertype = layers[i]->layer_param().type();
+    //caffe::string to_print = layername + " , " + layertype;
+    caffe::string to_print = layername;
+    layers[i]->print_stats(to_print.c_str());
+  }
+  LOG(INFO) << "caffe run complete";
 
   return 0;
 }

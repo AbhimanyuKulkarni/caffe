@@ -1,37 +1,55 @@
 #!/usr/bin/perl
 #
+# reads stdin
+# input format:
+# ... , bandwidth, accuracy
+# find pareto frontier with low bandwidth, high accuracy
+# print the input lines in the pareto frontier
 
 use Scalar::Util qw(looks_like_number);
 
-  @best = ();
-  foreach(<>){
-    s/,\s*$//;
-    ($bn,$an) = (split /[,%]/)[-2..-1];
-    next unless (looks_like_number($bn));
-    next unless (looks_like_number($an));
-    $new = $_;
+@best = ();
+foreach(<>){
+  s/,\s*$//;
+  ($bn,$an) = (split /\s*[,%]\s*/)[-2..-1];
+  next unless (looks_like_number($bn));
+  next unless (looks_like_number($an));
+  $new = $_;
 
-    $foundBetter=0;
-    foreach $b (0..$#best) {
-      ($bb,$ab) = (split /[,%]/,$best[$b])[-2..-1];
+#  print "considering $_\n";
 
-      if ($bn >= $bb and $an <= $ab){
-        $foundBetter=1;
-      }
+  $foundBetter=0;
+  foreach $b (0..$#best) {
 
-      if ($bn <= $bb and $an >= $ab){
-        delete $best[$b];
-        $b--;
-      }
+    # get a BEST point from the pareto frontier
+    ($bb,$ab) = (split /\s*[,%]\s*/,$best[$b])[-2..-1];
 
+    $equal = 0;
+    if ($bn == $bb and $an == $ab) {
+      $equal = 1;
     }
 
-    unless ($foundBetter){
-      push @best, $new;
+    # if N has higher bandwidth, lower accuracy then B is strictly better, don't include N
+    if ($bn >= $bb and $an <= $ab){
+      $foundBetter=1;
+#      print "FOUND BETTER\n";
+    }
+
+    # if N has lower bandwidth, higher accuracy than B, delete B
+    if (not $equal and $bn <= $bb and $an >= $ab){
+#      print "deleting    $best[$b]\n";
+      delete $best[$b];
+      $b--;
     }
   }
 
-  @best = sort @best;
-  foreach (@best) {
-    print "$_" unless m/^\s*$/;
+  unless ($foundBetter){
+    push @best, $new;
+#    print "adding      $new\n";
   }
+}
+
+@best = sort @best;
+foreach (@best) {
+  print "$_" unless m/^\s*$/;
+}

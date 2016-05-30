@@ -36,8 +36,8 @@ layer {
     mean_value: 123
   }
   data_param {
-#    source: "examples/imagenet/ilsvrc12_val_lmdb"
-    source: "examples/imagenet/ilsvrc12_train_lmdb"
+    source: "examples/imagenet/ilsvrc12_val_lmdb"
+#    source: "examples/imagenet/ilsvrc12_train_lmdb"
     batch_size: 50
     backend: LMDB
   }
@@ -977,7 +977,7 @@ layer {
     phase: TEST
   }
   accuracy_param {
-    top_k: 1
+    top_k: 5
   }
 }
 layer {
@@ -1761,7 +1761,7 @@ layer {
     phase: TEST
   }
   accuracy_param {
-    top_k: 1
+    top_k: 5
   }
 }
 layer {
@@ -2477,7 +2477,8 @@ layer {
   type: "Accuracy"
   bottom: "loss3/classifier"
   bottom: "label"
-  top: "loss3/top-1"
+  top: "accuracy"
+  #top: "loss3/top-1"
   include {
     phase: TEST
   }

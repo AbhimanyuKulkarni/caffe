@@ -51,7 +51,9 @@ foreach my $line (@lines){
   if ($line =~ m/name:\s*\"([^\"]+)\"/) {
     $name = $1;
     #print "name = $name\n";
-    if (grep /^$name$/, @layers) {
+    if (grep /^$name$/, @layers 
+        or ($layers[0] eq '*' and $depth==1)
+        ) {
       #print "match\n";
       $inLayer = 1;
       $done = 0;

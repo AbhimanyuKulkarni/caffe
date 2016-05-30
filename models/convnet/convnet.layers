@@ -1,5 +1,1 @@
-conv1,pool1,relu1
-conv2,relu2,pool2
-conv3,relu3,pool3
-ip1
-ip2
+conv_layers.csv

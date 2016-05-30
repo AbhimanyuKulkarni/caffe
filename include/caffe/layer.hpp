@@ -45,8 +45,10 @@ class Layer {
           blobs_[i]->FromProto(layer_param_.blobs(i));
         }
       }
+      approximator_.init( layer_param_.chunk_size() );
     }
-  virtual ~Layer() {}
+  virtual ~Layer() {
+  }
 
   /**
    * @brief Implements common layer setup functionality.
@@ -288,6 +290,9 @@ class Layer {
     param_propagate_down_[param_id] = value;
   }
 
+  void print_stats(const char * name){
+    approximator_.print_stats(name, layer_param_);
+  }
 
  protected:
   /** The protobuf that stores the layer parameters */

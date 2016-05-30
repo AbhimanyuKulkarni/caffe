@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 
+$caffeDir = "/localhome/juddpatr/caffe";
+
 sub grepFile {
   my $grepStr = $_[0];
   my $file = $_[1];
@@ -20,12 +22,28 @@ while (scalar(@ARGV)){
     die "Error $runDir is not a directory\n";
   }
 
+  # rundir is net-other
+  $runDir =~ /^([^-]+)-?/;
+  $net = $1;
+  if ($net eq "") {
+    $runDir =~ /^(.*)\//;
+    $net = $1;
+  }
+  $net =~ s/\///g;
+
+  print "net = $net\n";
+  $baseline = `cat $caffeDir/models/$net/$net.baseline`;
+  print "baseline = $baseline\n";
+
+  my @files = `find $runDir -mtime -1 -name "stderr"`;
+  chomp(@files);
   my @files = glob ("$runDir/*/stderr");
   my @stats = ();
   my @failed = ();
 
   print "filename, param, accuracy\n";
   foreach $file (@files){
+    $done = grepFile("caffe run complete", $file);
     my $grepStr = "caffe\.cpp.*accuracy";
     $_ = grepFile($grepStr, $file);
 
@@ -33,7 +51,7 @@ while (scalar(@ARGV)){
       print "$file filetype is binary\n";
     }
     my $accuracy = -1;
-    if ( /^$/ ){ # empty string
+    if ( /^$/ or not $done){ # empty string
       push @failed, $file;
     } else {
       /accuracy = (\d+\.\d+)/;
@@ -45,6 +63,10 @@ while (scalar(@ARGV)){
     /([\w\d]+)-([\w\d_]+)-([0-9\.]+)/;
     my $layer = $1;
     my $param = $3;
+    
+    if ($baseline){
+      $accuracy = $accuracy/$baseline;
+    }
 
     push @array, sprintf("%-30s , %5s , %.4f , %.4f", $file ,$layer ,$param ,$accuracy);
     print "$array[-1]\n";
@@ -54,4 +76,5 @@ while (scalar(@ARGV)){
   if (scalar @failed){
     print "Failed runs: \n\t" . (join "\n\t", @failed) . "\n";
   }
+  print "\n";
 }

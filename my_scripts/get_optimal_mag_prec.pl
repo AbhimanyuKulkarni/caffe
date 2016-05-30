@@ -5,7 +5,7 @@
 use Data::Dumper;
 use Scalar::Util qw(looks_like_number);
 
-$launchDir = "/localhome/juddpatr/caffe_error/launch";
+$caffeDir = "/localhome/juddpatr/caffe";
 
 
 sub grepFile {
@@ -40,9 +40,10 @@ $startDir = `pwd`;
 foreach $dir (@runDirs) { # alexnet-find-optimal
   $dir =~ /([^-]+)-([^-]+)-(.*)/;
   $net = $1;
+  $modelDir = "$caffeDir/models/$net";
 
   # read in datasizes
-  open ($ds, "<$launchDir/$net.datasize") or die "$! $net.datasize\n";
+  open ($ds, "<$modelDir/$net.datasize") or die "$! $net.datasize\n";
   @datasizes = ();
   foreach (<$ds>){
     ($idx,$data,$weight) = (split /,/,$_);
@@ -51,7 +52,7 @@ foreach $dir (@runDirs) { # alexnet-find-optimal
     }
   }
   close $ds;
-  $baseline = `cat $launchDir/$net.baseline`;
+  $baseline = `cat $modelDir/$net.baseline`;
   chomp($baseline);
 
   #calculate baseline bandwidth

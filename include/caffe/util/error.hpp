@@ -11,7 +11,14 @@ template <typename Dtype>
 class Approximator {
   private:
     StatTracker<Dtype> stats_;
+    StatTracker<int> * zeros_in_chunks_;
+    long long zero_count;
+    long long data_count;
   public: 
+
+    Approximator();
+    ~Approximator();
+    void init(int chunkSize);
     void pre_layer (
       const vector<Blob<Dtype>*> & bottom, 
       const vector<Blob<Dtype>*> & top,
@@ -19,7 +26,7 @@ class Approximator {
       LayerParameter& param
       );
 
-    void print_stats(string name);
+    void print_stats( const char * name , LayerParameter & param);
 
     void add_error( Dtype * const in, int size, int type, Dtype error);
 
@@ -28,6 +35,10 @@ class Approximator {
     void limit_prec( Dtype * const in, int size, int prec );
 
     void limit_mag_prec( Dtype * const in, int size, int mag, int prec );
+
+    long long count_zeros( Dtype * const in, int size );
+
+    void zero_out( Dtype * const in, int size, Dtype threshold );
 
 }; // class Approximator
 

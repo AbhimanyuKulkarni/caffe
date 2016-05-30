@@ -5,7 +5,7 @@
 use Data::Dumper;
 use Scalar::Util qw(looks_like_number);
 
-$launchDir = "/localhome/juddpatr/caffe_error/launch";
+$caffeDir = "/localhome/juddpatr/caffe";
 
 
 sub grepFile {
@@ -42,7 +42,7 @@ foreach $dir (@runDirs) { # alexnet-find-optimal
   $net = $1;
 
   # read in datasizes
-  open ($ds, "<$launchDir/$net.datasize") or die "$! $net.datasize\n";
+  open ($ds, "<$caffeDir/models/$net/$net.datasize") or die "$! $net.datasize\n";
   @datasizes = ();
   foreach (<$ds>){
     ($idx,$data,$weight) = (split /,/,$_);
@@ -51,9 +51,9 @@ foreach $dir (@runDirs) { # alexnet-find-optimal
     }
   }
   close $ds;
-  $prec = `cat $launchDir/$net.prec`;
+  $prec = `cat $caffeDir/models/$net/$net.prec`;
   chomp($prec);
-  $baseline = `cat $launchDir/$net.baseline`;
+  $baseline = `cat $caffeDir/models/$net/$net.baseline`;
   chomp($baseline);
 
   #calculate baseline bandwidth
@@ -100,10 +100,12 @@ foreach $dir (@runDirs) { # alexnet-find-optimal
         $tempParams[$layerNum-1]--;
       }
 
-      my $grepStr = "caffe\.cpp:18[78].*accuracy";
+      my $grepStr = "caffe\.cpp.*final accuracy";
+#my $grepStr = "caffe\.cpp:188.* accuracy";
       $_ = grepFile($grepStr, $file);
       my $accuracy = -1;
       if ( /^$/ ){ # empty string
+        print "FAILED\n";
         push @failed, $file;
       } else {
         /accuracy = (\d+\.\d+)/;

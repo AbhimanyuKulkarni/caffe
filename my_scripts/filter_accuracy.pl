@@ -3,7 +3,7 @@
 
 use Scalar::Util qw(looks_like_number);
 
-$launchDir = "/localhome/juddpatr/caffe_error/launch";
+$caffeDir = "/localhome/juddpatr/caffe";
 
 $first=1;
 $net="";
@@ -12,7 +12,8 @@ foreach(<>){
 
   if ($first) {
     $net = (split /-/)[0];
-    $baseline = `cat $launchDir/$net.baseline`;
+    $modelDir = "$caffeDir/models/$net";
+    $baseline = `cat $modelDir/$net.baseline`;
     $first=0;
     print "$net $baseline\n";
   }

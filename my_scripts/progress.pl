@@ -12,6 +12,7 @@ chomp($me);
 $attrStr = join ',',@attrs;
 @resp = `condor_q -l -attributes "$attrStr" $me`;
 
+
 while (1){
   $line = shift(@resp);
   last if ($line =~ /Submitter/) or not scalar(@resp);
@@ -62,13 +63,16 @@ print "\n";
 
 printf "%-9s %11s %-10s %1s  %7s %s\n" ,"ID", "START_TIME", "RUNTIME", "S", "PROGRESS", "DIR";
 foreach (@resp){
-  next unless m/\d+\.\d+\s+$me/;
+  s/^\s*//;
+  next unless m/\s*\d+\.\d+\s+$me/;
+  
   @cols = split /\s+/, $_;
   $longInfo = $job_hash{$cols[0]};
   $_ = `grep Batch $longInfo/stderr | tail -n 1`;
   /Batch\s+(\d+)/;
   $batch=$1;
+  $total=`awk '{print \$3}' < $longInfo/args`;
   $longInfo =~ s/.*results\///;
-  printf "%-9s %5s %5s %10s %s   %3d/100 %s\n" ,$cols[0], $cols[2], $cols[3], $cols[4], $cols[5], $batch, $longInfo;
+  printf "%-9s %5s %5s %10s %s   %3d/%3d %s\n" ,$cols[0], $cols[2], $cols[3], $cols[4], $cols[5], $batch, $total, $longInfo;
 }
 

@@ -1,248 +1,242 @@
 #!/usr/bin/perl
-#
-
+# launch script, run ./launch.pl -h for help
 use Getopt::Std;
-use POSIX qw(strftime);
 use Scalar::Util qw(looks_like_number);
 
-sub my_system;
-
-my $timestamp = strftime "%F-%H-%M", localtime;
-
-getopts('rtn');
+getopts('rtnh');
 my $rerun = $opt_r;
 my $test = $opt_t;
 my $norun = $opt_n;
+my $help = $opt_h;
+
+if ($help) {
+usage();
+exit;
+}
 
 my $caffeDir = "/localhome/juddpatr/caffe";
+my $modelDir = "$caffeDir/models";
 my $resultDir = "/aenao-99/juddpatr/caffe/results";
-
-my %weight_hash = (
-      'convnet' => "$caffeDir/examples/cifar10/cifar10_quick_iter_4000.caffemodel"
-    , 'alexnet' => "$caffeDir/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel"
-    , 'googlenet' => "$caffeDir/models/bvlc_googlenet/bvlc_googlenet.caffemodel"
-    , 'vgg_devils' => "$caffeDir/models/vgg_devils/VGG_CNN_S.caffemodel"
-    , 'nin_imagenet' => "$caffeDir/models/nin_imagenet/nin_imagenet.caffemodel"
-    , 'lenet' => "$caffeDir/examples/mnist/lenet_iter_10000.caffemodel"
-    );
-my %model_hash = (
-      'convnet' => "$caffeDir/models/my5/convnet.prototxt"
-    , 'alexnet' => "$caffeDir/models/my5/alexnet.prototxt"
-    , 'googlenet' => "$caffeDir/models/my5/googlenet.prototxt"
-    , 'vgg_devils' => "$caffeDir/models/vgg-devils/VGG_CNN_S_deploy.prototxt"
-    , 'nin_imagenet' => "$caffeDir/models/my5/nin.prototxt"
-    , 'lenet' => "$caffeDir/models/my5/lenet.prototxt"
-    );
 
 my $run = "$caffeDir/launch/run.sh";
 
 #-------------------------------------------------------------------------------------------
 
-$param = "weight_precision";
+$param = "chunk_size";
 $param = "data_precision";
 $param = "max_data_mag";
+$param = "weight_precision";
 $param = "";
+$param = "prune_data_threshold";
 
-$net = "googlenet";
-$net = "nin_imagenet";
-$net = "convnet";
-$net = "alexnet";
-$net = "lenet";
+$iters      = 100;
+$skip       = 0;
+$batchSize  = 0;    # 0 to use default
 
-$iters = 1;
-$skip = 0;
+my @nets = ("lenet","convnet","alexnet","nin_imagenet","googlenet","vgg_cnn_s","vgg_cnn_m_2048","vgg_19layers");
+my @nets = ("lenet");
+for $net (@nets) {
+  $netDir="$modelDir/$net";
 
-#for $net ("lenet","convnet","alexnet","nin_imagenet","googlenet") {
-for $dummy (""){
+  $useFixedPrec = 0;
+  $prec = (file2arr("$netDir/$net.prec"))[0];
 
-$prec = `cat $net.prec`;
-chomp($prec);
+  $useFixedMag = 0;
+  $mag = 2;
 
-open ($fh, "<$net.pareto") or die "$! $net.pareto\n";
-@mags = (<$fh>);
-chomp @mags;
+  @mags = file2arr("$netDir/$net.pareto");
+  @layers = file2arr("$netDir/$net.layers");
+  @mags = ('dummy');
 
-$batchTitle = "inter-stage-$param-$iters";
-$batchTitle = "per-stage-$param-$iters";
-$batchTitle = "$net-incremental-optimal-$param-$iters";
-$batchTitle = "$net-histo";
-$batchTitle = "$net-stepdown-$param-$iters";
-$batchTitle = "$net-incremental-uniform-$param-$iters";
-$batchTitle = "$net-per-layer-$param-prec$prec-$iters";
-$batchTitle = "$net-test-$iters";
-$batchTitle = "$net-iters";
-$batchTitle = "$net-baseline-$iters";
-$batchTitle = "$net-uniform-$param-$iters";
-$batchTitle = "$net-uniform-mag-prec-$iters";
-$batchTitle = "$net-per-layer-$param-$iters";
-$batchTitle = "$net-validate-uniform-$param-prec$prec-$iters";
-$batchTitle = "$net-validate-custom-$param-prec$prec-$iters";
-$batchTitle = "$net-validate-custom-mag-prec-set2";
-$batchTitle = "$net-baseline-test-$iters";
+  $profile = (file2arr("$netDir/best-mag-error0.csv"))[0];
+  die "Error: profile=$profile from $netDir/best-mag-error0.csv\n" if $profile eq "";
 
-@values = 0..15;
+  $batchTitle = "per-layer-bits-custom-mag-$iters";
+  $batchTitle = "per-layer-bits-custom-mag-error0-$iters";
+  $batchTitle = "baseline-$iters";
+  $batchTitle = "per-layer-$param-$iters";
+  $batchTitle = "test";
+
+  @values = (1);
 
 #---------------------------------------------------------------------------------------------
 
-$batchName = "$batchTitle";
-$batchDir = $resultDir . "/$batchName";
+  $batchName = "$net-$profile";
+  $batchName = "$net-$batchTitle";
+  $batchDir = $resultDir . "/$batchName";
+  $batchDir = $resultDir . "/$batchTitle/$net";
 
-$model = $model_hash{$net};
-$weights = $weight_hash{$net};
+  $model = "$caffeDir/models/$net/train_val.prototxt";
+  $weights = "$caffeDir/models/$net/weights.caffemodel";
 
-# create common batch-job.submit for all jobs in this batch
-open($fh, ">batch-job.submit") or die "could not open batch-job.submit for writing\n";
-print $fh <<'END_MSG';
-Universe = vanilla
-Getenv = True
-Requirements = (Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform ) && ( RemoteHost == "aenao-26.eecg.toronto.edu" )
-Executable = run.sh
-Output = stdout
-Error = stderr
-Log = condor.log
-Rank = (TARGET.Memory*1000 + Target.Mips) + ((TARGET.Activity =?= "Idle") * 100000000) - ((TARGET.Activity =?= "Retiring" ) * 100000000 )
-Notification = error
-Copy_To_Spool = False
-Should_Transfer_Files = no
-#When_To_Transfer_Output = ON_EXIT
-END_MSG
-
-if ("$net" eq "googlenet") {
-  print $fh "+AccountingGroup = \"long_jobs.juddpatr\"\n";
-  print $fh "request_memory = 2048\n";
-} else {
-  print $fh "request_memory = 1024\n";
-}
-close $fh;
-
-
-# create batch dir and skeleton dir
-if ($rerun) {
-  die "$batchDir does not exists\n" unless ( -d $batchDir );
-} else {
-  if (-d $batchDir and not $test){
-    print "$batchDir exists, clobber (y/n)?";
-    my $in = <>;
-    exit if ( $in !~ /^\s*[yY]\s*$/ );
-    my_system("rm -rf $batchDir");
+  if ( not -d "$resultDir/$batchTitle" ){
+    my_system("mkdir $resultDir/$batchTitle");
   }
-  my_system("mkdir $batchDir");
 
-  # make skeleton dir
-  my_system("mkdir $batchDir/.skel");
-  my_system ("cp $caffeDir/build/tools/caffe.bin $batchDir/.skel/.");
-  my_system ("cp $caffeDir/build/lib/libcaffe.so $batchDir/.skel/.");
-}
+  # create common batch-job.submit for all jobs in this batch
+  write_batch_job($net);
 
-my_system("cp batch-job.submit $batchDir/.skel/.") ;
-
-
-open ($layerFile, "<$net.layers") or die "$! $net.layers";
-@layers = <$layerFile>;
-chomp(@layers);
-
-my $first = 1;
-
-print "Preparing $batchDir\n";
-
-# create individual submit script
-my_system("cp batch-job.submit job.submit");
-open($fh, ">>job.submit") or die "could not open submit for append\n";
-
-#foreach $layer (@layers){
-#foreach $layer (0..$#layers){
-#foreach $layer ("_all"){
-foreach $layer ("_custom"){
-
-#  sleep(60) if not $first;
-#  $first = 0;
-
-  # strip '/'s from layer name when to create runDir
-  $layer_dir = "layer";
-  if (looks_like_number($layer)){
-    $layer_dir .= sprintf("%02d",$layer);
+  # create batch dir and skeleton dir
+  if ($rerun) {
+    die "$batchDir does not exists\n" unless ( -d $batchDir );
   } else {
-    $layer_dir .= $layer;
+    print "Preparing $batchDir\n";
+    if (-d $batchDir and not $test){
+      print "$batchDir exists, clobber (y/n)?";
+      my $in = <>;
+      exit if ( $in !~ /^\s*[yY]\s*$/ );
+      my_system("rm -rf $batchDir");
+    }
+    my_system("mkdir $batchDir");
+
+    # make skeleton dir
+    my_system("mkdir $batchDir/.skel");
+    my_system ("cp $caffeDir/build/tools/caffe.bin $batchDir/.skel/.");
+    my_system ("cp $caffeDir/build/lib/libcaffe.so $batchDir/.skel/.");
   }
-  $layer_dir =~ s/\//_/g;
 
-  printf("%s-%s\n", $layer_dir, $param) if not $test and not $rerun;
+  my_system("cp batch-job.submit $batchDir/.skel/.") ;
 
-  # precisions/magnitude
-#  for $value (@values) {
-#    print " $value" if not $test and not $rerun;
-  for $mag (@mags) {
-    $jobName = sprintf("%s-%s-%s",$layer_dir,$param,$mag);
-    $jobName = "test";
-    print "$jobName\n";
+  # create individual submit script
+  my_system("cp batch-job.submit job.submit");
+  open($fh, ">>job.submit") or die "could not open submit for append\n";
+
+  $jobCount=0;
+#foreach $layer (0..$#layers){
+  foreach $layer ("_all"){
+  #foreach $layer ("_custom"){
+
+    $layer_dir = "layer";
+    if (looks_like_number($layer)){
+      $layer_dir .= sprintf("%02d",$layer);
+    } else {
+      $layer_dir .= $layer;
+    }
+    # strip '/'s from layer name when to create runDir
+    $layer_dir =~ s/\//_/g;
+
+    printf("%s-%s", $layer_dir, $param) if not $test and not $rerun;
+
+    for $value (@values) {
+      print " $value" if not $test and not $rerun;
+  #   $jobName = sprintf("%s-%s-%02d",$layer_dir,$param,$value);
+
+  #    for $dummy (0) {
+  #     $jobName = sprintf("%s-%s-%s",$layer_dir,$param,$mag);
+    #   $jobName = "test";
+
+
 
 # testing
-#  foreach $value (1) {
-#    my $jobName = "run";
-    my $runDir = $batchDir . "/" . $jobName;
+#  $mag_prec = 0;
+#  foreach $mag (0..16) {
+#    foreach $prec (0..16) {
+      #$jobName = sprintf "mag-$profile-layer%02d-bits-%02d", $layer, $value;
+      $jobName = sprintf "layer%02d-%s-%02d", $layer, $param, $value;
+      if ($batchName =~ /baseline/){ $jobName = "baseline"; }
 
-    if ($rerun and -d $runDir) {
-      # did this run succeed?
-      if (system("grep \"final accuracy\" $runDir/stderr >/dev/null") == 0){
-        next; # if so, skip
-      } else {
-        print "\nRerunning $runDir\n";
-      }
-    } else { 
-      # setup runDir
-      my_system("mkdir $runDir");
+      my $runDir = $batchDir . "/" . $jobName;
 
-      # copy files to runDir
-      my_system("cp $model $runDir/model.prototxt");
-      my_system("cp $run $runDir/run.sh");
-      my_system("ln -s $batchDir/.skel/. $runDir/.skel");
+      my $runDirExists = (-d $runDir);
 
-
-      # set parameters in model 
-      if ("$param" ne "") {
-        if ($layer =~ m/all/) {
-          $l = join ',', @layers;
-          my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" $param $value");
-          my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" data_precision $prec");
-        }  elsif ($layer =~ m/custom/) {
-          @val = split /[,-]/,$mag;
-          foreach $i (0..$#val){
-            ($mag,$prec) = split /\./, $val[$i];
-            $mag--;
-            my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] max_data_mag $mag");
-            my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] data_precision $prec");
-          }
+      if ($rerun and -d $runDir) {
+        # did this run succeed?
+        $ret = system("grep \"final accuracy\" $runDir/stderr >/dev/null");
+        if ($ret == 0){
+          next; # if so, skip
         } else {
-          # individual layer 
-          my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$layer] $param $value");
+          print "Rerunning $runDir\n";
+        }
+      } else { 
+        # setup runDir
+        my_system("mkdir $runDir");
+
+        # copy files to runDir
+        my_system("cp $model $runDir/model.prototxt");
+        my_system("cp $run $runDir/run.sh");
+        my_system("ln -s $batchDir/.skel/. $runDir/.skel");
+
+        # set parameters in model 
+        if ("$param" ne "") {
+
+          if ($layer =~ m/all/) {
+            # set all layers to uniform param
+            $l = join ',', @layers;
+            #my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" $param $value");
+            if ($mag_prec) {
+              my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" max_data_mag $mag");
+              my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" data_precision $prec");
+            } else {
+              my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" $param $value");
+            }
+            if ($batchSize){
+              my_system("perl set_layer_param.pl $runDir/model.prototxt \"data\" batch_size 1");
+            }
+            if ($useFixedPrec){
+              my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" data_precision $prec");
+            }
+            if ($useFixedMag){
+              my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" max_data_mag $mag");
+            }
+          } elsif ($layer =~ m/custom/ or $batchTitle =~ /custom/) {
+            @val = split /[,-]/,$profile;
+            foreach $i (0..$#layers){
+              #($mag,$prec) = split /\./, $val[$i];
+              $mag = $val[$i];
+              $mag--; # drop sign bit
+              #  $wprec = $wprec_h{$net};
+              #  $wprec--; # drop sign bit
+                if ($batchTitle =~ /per-layer-bits-custom-mag/){
+                  my $bits = $value;
+                  my $msb = $mag;
+                  my $lsb = $msb - $bits + 1; 
+                  my $prec = -1*$lsb;
+                  my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] max_data_mag $msb");
+                  if ($i == $layer){
+                    my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] data_precision $prec");
+                  }
+                } else {
+                  my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] max_data_mag $mag");
+                  my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] data_precision $prec");
+                }
+#            my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$i] weight_precision $wprec");
+            }
+          } else {
+            # individual layer 
+            my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$layer] $param $value");
+            if ($useFixedPrec){
+              my_system("perl set_layer_param.pl $runDir/model.prototxt $layers[$layer] data_precision $prec");
+            }
+          }
         }
       }
-    }
-    
-    # always do with, run.sh will delete
-    if ($net eq "convnet") {
-      #copy leveldb files
-#my_system("cp -r $caffeDir/examples/cifar10/cifar10_test_leveldb $runDir/.");
-    }
 
-    $args = "model.prototxt $weights $iters";
-    my_system("echo \"$args\" > $runDir/args");
+      $args = "model.prototxt $weights $iters";
+      my_system("echo \"$args\" > $runDir/args"); # so we can run locally: ./run.sh `cat args`
 
-    # append job details to submit script
-    print $fh "InitialDir =  $runDir\n";
-    print $fh "Args = $args\n";
-    print $fh "Queue\n\n";
+        # append job details to submit script
+        print $fh "InitialDir =  $runDir\n";
+        print $fh "Args = $args\n";
+        print $fh "Queue\n\n";
+        $jobCount++;
+        last if ($batchTitle =~ m/baseline/);
+
+      } # foreach value
+#    } 
+    print "\n" if not $test and not $rerun;
     last if ($batchTitle =~ m/baseline/);
-
-  } # foreach value
-  print "\n" if not $test and not $rerun;
-  last if ($batchTitle =~ m/baseline/);
-} # foreach layer
+  } # foreach layer
 
   close $fh;
-  my_system("condor_submit job.submit") unless $norun;
+  if ($jobCount > 0){
+    my_system("condor_submit job.submit") unless $norun;
+  }
 
 }# foreach net
+
+
+
+
 
 #----------------------------------------------------------------------------------------------
 
@@ -259,3 +253,63 @@ sub my_system {
   }
 }
 
+sub write_batch_job {
+  my $net = shift(@_);
+  open($fh, ">batch-job.submit") or die "could not open batch-job.submit for writing\n";
+  print $fh <<'END_MSG';
+Universe = vanilla
+Getenv = True
+Requirements = (Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform )
+Executable = run.sh
+Output = stdout
+Error = stderr
+Log = condor.log
+Rank = (TARGET.Memory*1000 + Target.Mips) + ((TARGET.Activity =?= "Idle") * 100000000) - ((TARGET.Activity =?= "Retiring" ) * 100000000 )
+Notification = error
+Copy_To_Spool = False
+Should_Transfer_Files = no
+#When_To_Transfer_Output = ON_EXIT
+END_MSG
+
+  if ("$net" eq "googlenet") {
+    print $fh "+AccountingGroup = \"long_jobs.juddpatr\"\n";
+    print $fh "request_memory = 2048\n";
+  } elsif ($net =~ "vgg_19") {
+    print $fh "request_memory = 6144\n";
+  } elsif ($net =~ "vgg") {
+    print $fh "request_memory = 5120\n";
+  } else {
+    print $fh "request_memory = 1024\n";
+  }
+  close $fh;
+}
+
+sub usage () {
+print <<END_HELP;
+launches caffe jobs on condor
+options:
+
+  -t
+      test: prints commands instead of executing them
+
+  -n
+      norun: does everything but launch the job
+
+  -r
+      rerun: rerun any failed runs
+END_HELP
+}
+
+sub file2arr(){
+  my $filename=shift; 
+  my $fh = myopen("<$filename");
+  my @arr = <$fh>;
+  chomp(@arr);
+  return @arr;
+}
+
+sub myopen() {
+  my $filename=shift; 
+  open (my $fh, "$filename") or die "$! $filename";
+  return $fh; 
+}

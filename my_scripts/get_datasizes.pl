@@ -14,7 +14,7 @@ sub grepFile {
 getopts('v');
 $verb = $opt_v;
 
-my $caffeDir = "/localhome/juddpatr/caffe_error";
+my $caffeDir = "/localhome/juddpatr/caffe";
 
 # for each batch directory
 while (scalar(@ARGV)) {
@@ -30,14 +30,14 @@ while (scalar(@ARGV)) {
 
   $runDir =~ /([^-]*)-/;
   $net = $1;
-  open ($layerFile, "<$caffeDir/launch/$net.layers") or die "$! $net.layers";
+  open ($layerFile, "<$caffeDir/models/$net/$net.layers") or die "$! $net.layers";
   @layers = <$layerFile>;
   chomp(@layers);
 
   %datasize = ();
   foreach $file (@files){
     print "$file\n";
-    my $grepStr = "layer.hpp.*datasize";
+    my $grepStr = "error.cpp.*datasize";
     @matches = grepFile($grepStr, $file);
 
 # get stats for each sublayer
@@ -48,6 +48,7 @@ while (scalar(@ARGV)) {
       print "layer, data, weights\n";
     }
     foreach (@matches) {
+#      print "$_\n";
       /datasize.*:(.*)/;
       ($name,$di,$do,$d,$w) = split /\s*,\s*/, $1;
       die "Error: wrong format:\n\t$_\n\texpected: $expected\n" if $d eq "" or $w eq "";

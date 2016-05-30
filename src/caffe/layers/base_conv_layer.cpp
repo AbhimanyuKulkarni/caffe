@@ -166,10 +166,27 @@ void BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype* input,
     col_buff = col_buffer_.cpu_data();
   }
   for (int g = 0; g < group_; ++g) {
-    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, conv_out_channels_ /
-        group_, conv_out_spatial_dim_, kernel_dim_ / group_,
-        (Dtype)1., weights + weight_offset_ * g, col_buff + col_offset_ * g,
-        (Dtype)0., output + output_offset_ * g);
+
+//void caffe_cpu_gemm<float>(const CBLAS_TRANSPOSE TransA,
+//    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+//    const float alpha, const float* A, const float* B, const float beta,
+//    float* C) {
+//  int lda = (TransA == CblasNoTrans) ? K : M;
+//  int ldb = (TransB == CblasNoTrans) ? N : K;
+//  cblas_sgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
+//      ldb, beta, C, N);
+    caffe_cpu_gemm<Dtype>(
+            CblasNoTrans, // TRANSA
+            CblasNoTrans, // TRANSB
+            conv_out_channels_ / group_, // M
+            conv_out_spatial_dim_, // N
+            kernel_dim_ / group_, // K
+            (Dtype)1., // ALPHA
+            weights + weight_offset_ * g, //A
+            col_buff + col_offset_ * g, //B
+            (Dtype)0., // BETA
+            output + output_offset_ * g // C
+        );
   }
 }
 
