@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #include "caffe/util/stats.hpp"
 #include "caffe/blob.hpp"
 #include "caffe/proto/caffe.pb.h"
@@ -41,5 +42,11 @@ class Approximator {
     void zero_out( Dtype * const in, int size, Dtype threshold );
 
 }; // class Approximator
+=======
+namespace caffe {
+
+template <typename Dtype>
+void add_error( Dtype * const in, int size) ;
+>>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
 
 } // namespace caffe

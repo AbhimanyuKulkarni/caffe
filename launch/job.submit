@@ -1,0 +1,34 @@
+Universe = vanilla
+Getenv = True
+Requirements = ( Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform )
+Executable = run.sh
+Output = stdout
+Error = stderr
+Log = condor.log
+Rank = (TARGET.Memory*1000 + Target.Mips) + ((TARGET.Activity =?= "Idle") * 100000000) - ((TARGET.Activity =?= "Retiring" ) * 100000000 )
+Notification = error
+Copy_To_Spool = False
+Should_Transfer_Files = yes
+When_To_Transfer_Output = ON_EXIT
+Transfer_Input_Files = ../.skel, /localhome/juddpatr/caffe//launch/run.sh,model.prototxt
+Transfer_Output_Files = run.sh
+InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run1
+Args = 1
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run10
+Args = 10
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run100
+Args = 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run1000
+Args = 1000
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run10000
+Args = 10000
+Queue
+

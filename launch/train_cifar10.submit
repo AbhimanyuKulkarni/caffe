@@ -1,0 +1,19 @@
+Universe = vanilla
+Getenv = True
+Requirements = Mips > 700 && (TRUE) && (OpSys == "LINUX") && (Disk > 100000) && (Memory > 1024) && ( Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform )
+Executable = run.sh
+Output = stdout
+Error = stderr
+Log = condor.log
+Rank = (TARGET.Memory*1000 + Target.Mips) + ((TARGET.Activity =?= "Idle") * 100000000) - ((TARGET.Activity =?= "Retiring" ) * 100000000 )
+Notification = error
+Copy_To_Spool = False
+Should_Transfer_Files = yes
+When_To_Transfer_Output = ON_EXIT
+InitialDir = /aenao-99/juddpatr/caffe/results
+Args = 
+Transfer_Input_Files = /localhome/juddpatr/caffe/.build_release/lib/libcaffe.so, \
+  /localhome/juddpatr/caffe/launch/run.sh 
+Queue
+
+
