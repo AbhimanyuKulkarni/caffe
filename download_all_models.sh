@@ -34,8 +34,6 @@ if [ ! -f models/convnet/weights.caffemodel ]; then
 fi
 
 # Imagenet networks
-echo "follow this example to prepare the imagenet dataset: http://caffe.berkeleyvision.org/gathered/examples/imagenet.html"
-echo "you will need to create an account to get access to the dataset"
 
 for net in alexnet googlenet nin_imagenet vgg_cnn_s vgg_cnn_m_2048 vgg_19layers; do
   echo "downloading mode for $net"
@@ -48,3 +46,6 @@ for net in alexnet googlenet nin_imagenet vgg_cnn_s vgg_cnn_m_2048 vgg_19layers;
     cd -
   fi 
 done
+
+echo "follow this example to prepare the imagenet dataset: http://caffe.berkeleyvision.org/gathered/examples/imagenet.html"
+echo "you will need to create an account to get access to the dataset"
