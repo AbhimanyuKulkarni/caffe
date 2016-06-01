@@ -1,14 +1,16 @@
 # Caffe
 
-My branch of Caffe including the set of networks I've been using
+My fork of Caffe including the set of networks I've been using
 
-Quick setup:
+**Quick setup:**
 
-follow instructions here to install caffe: http://caffe.berkeleyvision.org/installation.html
-run download_all_models.sh to get pretrained weights for each network
-run ./test.sh models/alexnet (for example) to test the C++ interface
+- follow instructions here to install caffe: http://caffe.berkeleyvision.org/installation.html
+- run download_all_models.sh to get pretrained weights for each network
+- run ./test.sh models/alexnet (for example) to test the C++ interface
 
-save_net.pl is a script to generate data traces using the python interface, see save_net.pl -h
+**Scripts:**
+
+- save_net.pl is a script to generate data traces using the python interface, see save_net.pl -h
 
 ## License and Citation
 
