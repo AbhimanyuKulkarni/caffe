@@ -6,9 +6,10 @@ import sys
 import time
 import re
 import code
-from google.protobuf import text_format
-import caffe
 import argparse
+
+import caffe
+from google.protobuf import text_format
 
 
 def check_file(filename):
@@ -24,6 +25,8 @@ def read_params(net_name):
             conv_params -- dictionary mapping [layer name][parameter name] to the parameter value
             layers      -- list of layer names
     '''
+
+    assert(false, "read_params is depreicated, parameters should be read from network prototxt")
 
     #param_file = caffe_root +  net_name + '_in.csv'
     #param_file = caffe_root +  net_name + '_trace_params.csv'
@@ -59,13 +62,7 @@ def load_net(net_name):
             net_name -- name of network as used in the models directory
         Returns:
             net      -- caffe network object
-            proto    -- caffe network prototxt
     '''
-    #model = caffe_root + 'models/' + net_name + '/deploy.prototxt'
-    model = caffe_root + 'models/' + net_name + '/train_val.prototxt'
-    weights = caffe_root + 'models/' + net_name + '/weights.caffemodel'
-    check_file(model)
-    check_file(weights)
     net = caffe.Net(model, weights, caffe.TEST)
 
     # input preprocessing: 'data' is the name of the input blob == net.inputs[0]
@@ -81,7 +78,10 @@ def load_net(net_name):
     batch_size = 50
     net.blobs['data'].reshape(batch_size,3,227,227)
 
-    # also load prototxt
+    return net
+
+
+def read_prototxt(model):
     from caffe.proto import caffe_pb2
     net_param = caffe_pb2.NetParameter()
 
@@ -89,7 +89,7 @@ def load_net(net_name):
     with open(model) as f:
         text_format.Merge(str(f.read()), net_param)
 
-    return net, net_param
+    return net_param
 
 
 def roundup_to_multiple(x, m):
@@ -103,28 +103,16 @@ def to2d(a):
     return np.reshape(a, (a.shape[0],-1))
 
 
-def write_trace(net_name, batches):
+def write_trace(net, layers, batches, dir):
     ''' runs the network for a specified number of batches and saves the inputs to each layer
         Inputs:
-            net_name -- name of the network
+            net -- caffe net object
+            layers -- vector of protobuf layers to save
             batches  -- number of batches to run
+            dir -- directory to write trace files
         Returns:
             nothing           
     '''
-
-    # we need to get the input_blob to each layer, however each layer names matches its output blob
-    # unfortunately the python API doesn't give you this, so we need to get this information from C++
-    # and save it in a parameter file
-    conv_params, layers = read_params(net_name)
-
-    net, net_param = load_net(net_name)
-
-    # read relevent parameters from prototxt
-    print net_param
-
-    conv_param = [ l for l in net_param.layer if l.type == 'Convolution' ]
-    print [ (l.name, l.bottom) for l in conv_param ]
-    sys.exit(0)
 
     for b in range(batches):
         print "%s iteration %d" %(net_name, b)
@@ -139,51 +127,52 @@ def write_trace(net_name, batches):
 
         print 'layer, Nb, Ni, Nx, Ny'
         for l, layer in enumerate(layers):
-            sane_layer = re.sub('/','-',layer) # sanitize layer name so we can save it as a file (remove /)
-            net_dir = '%s/%s' % (trace_dir, net_name)
-            savefile = '%s/%s-%d' % (net_dir, sane_layer, b)
+            name = layer.name
+            sane_name = re.sub('/','-',name) # sanitize layer name so we can save it as a file (remove /)
+            savefile = '%s/%s-%d' % (dir, sane_name, b)
 
             if os.path.isfile(savefile + ".npy"):
                 print savefile, "exists, skipping"
                 continue
 
-            input_blob = conv_params[layer]['input_blob']
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+
+            input_blob = layer.bottom[0]
             data = net.blobs[input_blob].data
             if (len(data.shape) == 2):
                 (Nb, Ni) = data.shape
                 data = data.reshape( (Nb,Ni,1,1) )
-
-            (Nb, Ni, Nx, Ny) = data.shape
-            print layer, Nb, Ni, Nx, Ny
             
-            if not os.path.exists(net_dir):
-                os.makedirs(net_dir)
             print "saving: ", savefile
             np.save(savefile,data)
 
-def write_config(file_handle, net_name):
+
+def write_config(net, layers, model, weights, dir):
     ''' write a set of layer parameters for each layer
         Input:
-            file_handle -- file handle to write to
-            net_name    -- name of network, corresponding to directory in models dir
+            net -- caffe net object
+            layers -- vector of layers protobufs to save
+            model -- model prototxt filepath
+            weights -- model weight filepath
+            dir -- output directory
         Returns:
             nothing
     '''
 
-    conv_params, layers = read_params(net_name)
-
-    net, net_param = load_net(net_name)
-    
+    file_handle = open(dir + "/trace_params.csv", 'w')
     print "layer, input, Nn, Kx, Ky, stride, pad"
     for l, layer in enumerate(layers):
-        sane_layer = re.sub('/','-',layer) # sanitize layer name so we can save it as a file (remove /)
+        name = layer.name
+        sane_name = re.sub('/','-',name) # sanitize layer name so we can save it as a file (remove /)
 
-        input_blob = conv_params[layer]['input_blob']
-        stride = conv_params[layer]['stride']
-        pad = conv_params[layer]['pad']
+        input_blob = layer.bottom[0] # assume conv always has one input blob
+        stride = layer.convolution_param.stride
+        pad = layer.convolution_param.pad
+
         data = net.blobs[input_blob].data
-        weights = net.params[layer][0].data
-        print layer, "D", data.shape, "W", weights.shape
+        weights = net.params[name][0].data
+        print name, "D", data.shape, "W", weights.shape
 
         if (len(weights.shape) == 2):
             (Nn, Ni) = weights.shape
@@ -198,9 +187,10 @@ def write_config(file_handle, net_name):
             (Nb, Ni, Nx, Ny) = data.shape
             #(Kx, Ky) = (Nx, Ny)
 
-        outstr = ','.join( [str(i) for i in [layer, input_blob, Nn, Kx, Ky, stride, pad]] ) + "\n"
+        outstr = ','.join( [str(i) for i in [name, input_blob, Nn, Kx, Ky, stride, pad]] ) + "\n"
         print outstr
         file_handle.write(outstr)
+    file_handle.close()
 
         
 ##################### MAIN ########################################################################
@@ -241,15 +231,24 @@ sys.path.insert(0, '/home/patrick/python')
 
 caffe.set_mode_cpu()
 
-if write_params:
-    for net_name in net_names:
-        f = open(net_name + "_trace_params.csv", 'w')
-        write_config(f, net_name)
-        f.close()
+for net_name in net_names:
 
-else:
-    # run each network and save an ndarray of input data
-    for net_name in net_names:
-        write_trace(net_name, batches)
+    #model   = caffe_root + 'models/' + net_name + '/deploy.prototxt'
+    model   = caffe_root + 'models/' + net_name + '/train_val.prototxt'
+    weights = caffe_root + 'models/' + net_name + '/weights.caffemodel'
+    check_file(model)
+    check_file(weights)
+
+    net = load_net(net_name)
+    net_param = read_prototxt(model)
+
+    layers = [ l for l in net_param.layer if l.type in ['Convolution', 'InnerProduct'] ]
+    
+    out_dir = trace_dir + '/' + net_name
+
+    if write_params:
+        write_config(net, layers, model, weights, out_dir)
+    else:
+        write_trace(net, layers, batches, out_dir)
     
 
