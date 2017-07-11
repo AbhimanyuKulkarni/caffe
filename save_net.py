@@ -6,6 +6,10 @@ import sys
 import time
 import re
 import code
+from google.protobuf import text_format
+import caffe
+import argparse
+
 
 def check_file(filename):
     assert os.path.isfile(filename), "%s is not a file" % filename
@@ -55,6 +59,7 @@ def load_net(net_name):
             net_name -- name of network as used in the models directory
         Returns:
             net      -- caffe network object
+            proto    -- caffe network prototxt
     '''
     #model = caffe_root + 'models/' + net_name + '/deploy.prototxt'
     model = caffe_root + 'models/' + net_name + '/train_val.prototxt'
@@ -76,7 +81,15 @@ def load_net(net_name):
     batch_size = 50
     net.blobs['data'].reshape(batch_size,3,227,227)
 
-    return net
+    # also load prototxt
+    from caffe.proto import caffe_pb2
+    net_param = caffe_pb2.NetParameter()
+
+    print 'reading prototxt',model
+    with open(model) as f:
+        text_format.Merge(str(f.read()), net_param)
+
+    return net, net_param
 
 
 def roundup_to_multiple(x, m):
@@ -104,7 +117,14 @@ def write_trace(net_name, batches):
     # and save it in a parameter file
     conv_params, layers = read_params(net_name)
 
-    net = load_net(net_name)
+    net, net_param = load_net(net_name)
+
+    # read relevent parameters from prototxt
+    print net_param
+
+    conv_param = [ l for l in net_param.layer if l.type == 'Convolution' ]
+    print [ (l.name, l.bottom) for l in conv_param ]
+    sys.exit(0)
 
     for b in range(batches):
         print "%s iteration %d" %(net_name, b)
@@ -152,7 +172,7 @@ def write_config(file_handle, net_name):
 
     conv_params, layers = read_params(net_name)
 
-    net = load_net(net_name)
+    net, net_param = load_net(net_name)
     
     print "layer, input, Nn, Kx, Ky, stride, pad"
     for l, layer in enumerate(layers):
@@ -184,9 +204,6 @@ def write_config(file_handle, net_name):
 
         
 ##################### MAIN ########################################################################
-
-import caffe
-import argparse
 
 caffe_root      = './'  # this file is expected to be in {caffe_root}/examples
 trace_dir       = caffe_root + '/net_traces' # write traces to this directory
