@@ -37,4 +37,6 @@ if [ "$MODEL_DIR" = "" ]; then
   exit
 fi
 
-./build/tools/caffe test $gpu -model $MODEL_DIR/train_val.prototxt -weights $MODEL_DIR/weights.caffemodel -iterations $iters
+cmd="./build/tools/caffe test $gpu -model $MODEL_DIR/train_val.prototxt -weights $MODEL_DIR/weights.caffemodel -iterations $iters"
+echo $cmd
+exec $cmd
