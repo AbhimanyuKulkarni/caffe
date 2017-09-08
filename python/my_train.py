@@ -1,37 +1,113 @@
 #!/usr/bin/env python
 
+import argparse
+import sys
+import os
+os.environ['GLOG_minloglevel'] = '2' # supress caffe output
 import caffe
 import numpy as np
 import matplotlib.pyplot as plt
-from caffe import layers as L, params as P
-import argparse
+from caffe.proto import caffe_pb2
 from google.protobuf import text_format
-import sys
-import os
+import plot_acc_loss
+import dist_stats
+import pickle
+from scipy.stats import itemfreq
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument( "--solver", help="solver prototxt")
     parser.add_argument( "--train_net", help="train net prototxt")
     parser.add_argument( "--test_net", help="solver prototxt")
-    parser.add_argument( "--snapshot_prefix", help="prefix of snapshot file, including path")
-    parser.add_argument( "--save_plot", help="save plot to file", default="")
+    parser.add_argument( "--snapshot_prefix", help="prefix of snapshot file, will go in out_dir")
+    parser.add_argument( "--save_plot", help="save plot to file", action='store_true')
     parser.add_argument( "--show_plot", help="show plot", action='store_true')
     parser.add_argument( "--out_dir", help="directory to store temp files and plots", default="")
+    parser.add_argument( "--baseline", help="run baseline solver", action='store_true')
+    parser.add_argument( "--itemfreq", help="measure itemfreq of quantized blob", action='store_true')
+    parser.add_argument( "--histo", help="dump histogram of each blob", action='store_true')
+    parser.add_argument( "--sched", help="schedule: [test,short,full]", type=str, default="full")
     args = parser.parse_args()
     return args
 
-def set_solver(param, prec):
+def read_solver_parameter(filename):
+    from caffe.proto import caffe_pb2
+    s = caffe_pb2.SolverParameter()
+
+    with open(filename) as f:
+        text_format.Merge(str(f.read()), s)
+
+    return s
+
+def read_net_prototxt(filename):
+    netproto = caffe_pb2.NetParameter()
+    with open(filename) as f:
+        text_format.Merge(str(f.read()), netproto)
+    return netproto
+
+def imbalance(vec):
+    l = len(vec)
+    target = 1./l
+    abs_diff = [ abs (v - target) for v in vec ]
+    sad = sum(abs_diff)
+    return sad
+
+def scale_by_histo(prec, histo, layer_name, blob_name):
+    print 'layer_name=',layer_name
+    print 'blob_name=',blob_name
+    counts, bins = histo[layer_name][blob_name]
+    print 'count=',counts
+    print 'bin=',bins
+    cdf = np.cumsum(counts)
+    cdf = cdf/cdf[-1] # normalize to 1
+    print 'cdf=',cdf 
+    nbins = 2 ** (prec) - 1
+    print 'nbins=',nbins 
+
+    
+    thresholds = np.arange(1. , nbins)/nbins # 2 bits, 3 bins, [1/3, 2/3]
+    print 'thresholds=',thresholds 
+    edges = [np.argmax(cdf > t) for t in thresholds]
+    print 'edges=',edges
+    edgevals = bins[edges]
+    print 'edgevals=',edgevals 
+
+    if not np.any(edges):
+        range = bins[-1]
+    elif bins[0] >= 0:
+        avg_binsize = np.diff(edgevals).mean()
+        range = avg_binsize * nbins 
+    else:
+        avg_binsize = np.diff(edgevals).mean()
+        range = avg_binsize * nbins / 2
+
+    print 'range=',range
+    scale = float( 2 ** (prec-1) - 1 ) / range
+    print 'scale=',scale 
+    return scale
+
+
+def scale_by_range(stats, layer_name, blob_name):
+    '''
+        determine scaling factor from statistics on the data distribution
+    '''
+    stat_name = '-'.join([layer_name, blob_name])
+    dmin = stats[stat_name]['min'][0] # use the last iteration
+    dmax = stats[stat_name]['max'][0]
+    std  = stats[stat_name]['std'][-1]
+    abs_max = max( abs(dmin), abs(dmax) )
+    scale = float( 2 ** (prec-1) - 1 ) / ( abs_max * 2)
+    # scale = float( 2 ** (prec-1) - 1 ) / std
+    return scale
+
+def set_solver(param, prec, scale, solver_file, sched='full'):
 
     # Read existing solver
-    from caffe.proto import caffe_pb2
     s = caffe_pb2.SolverParameter()
 
     print 'reading solver config from',solver_config_path
     with open(solver_config_path) as f:
         text_format.Merge(str(f.read()), s)
-
-    print s
 
     s.random_seed = 0xCAFFE
 
@@ -45,6 +121,8 @@ def set_solver(param, prec):
     if (s.train_net and s.net):
         print "Error: can't set net, train_net already set to", s.train_net
 
+    stats = pickle.load(open('stats.pickle')) 
+    print stats.keys()
     # Update net prototxt
 
     # Read net prototxt
@@ -52,31 +130,72 @@ def set_solver(param, prec):
     with open(s.net) as f:
         text_format.Merge(str(f.read()), netproto)
 
+    with open('histograms.pickle') as f:
+        histo = pickle.load(f)
+
     for layer in netproto.layer:
-        print layer.name, layer.type
         if layer.type in ['Convolution','InnerProduct']:
-            print 'setting precision'
-            if param == 'fwd_act':
+            print 'setting precision', layer.name, param, prec, scale
+            # support substring matching
+            # param='act' will set both fwd_act and bwd_act
+
+    
+            scale = scale_by_histo(prec, histo, layer.name, param)
+            if param in 'fwd_act':
                 layer.fwd_act_precision_param.precision=prec
-            if param == 'fwd_wgt':
+                layer.fwd_act_precision_param.scale=scale
+                # layer.fwd_act_precision_param.scale=scale_by_range(stats, layer.name, 'act_in_data')
+            if param in 'fwd_wgt':
                 layer.fwd_wgt_precision_param.precision=prec
-            if param == 'bwd_act':
+                layer.fwd_wgt_precision_param.scale=scale
+                # layer.fwd_wgt_precision_param.scale=scale_by_range(stats, layer.name, 'wgt_data')
+            if param in 'bwd_act':
                 layer.bwd_act_precision_param.precision=prec
-            if param == 'bwd_wgt':
+                layer.bwd_act_precision_param.scale=scale
+                # layer.bwd_act_precision_param.scale=scale_by_range(stats, layer.name, 'act_in_data')
+            if param in 'bwd_wgt':
                 layer.bwd_wgt_precision_param.precision=prec
-            if param == 'bwd_grd':
+                layer.bwd_wgt_precision_param.scale=scale
+                # layer.bwd_wgt_precision_param.scale=scale_by_range(stats, layer.name, 'wgt_data')
+            if param in 'bwd_grd':
                 layer.bwd_grd_precision_param.precision=prec
+                layer.bwd_grd_precision_param.scale=scale
+                # layer.bwd_grd_precision_param.scale=scale_by_range(stats, layer.name, 'act_out_diff')
+
+
 
     # Write the solver to a temporary file and return its filename.
+    print 'writing to', out_net_proto_path
     with open(out_net_proto_path, 'w') as f:
         f.write(str(netproto))
 
     # OVERWRITE SOLVER PARAMETERS
 
-    # s.test_interval = 500  # Test after every 500 training iterations.
-    # s.test_iter.append(100) # Test on 100 batches each time we test.
+    s.net = out_net_proto_path
 
-    # s.max_iter = 10000     # no. of times to update the net (training iterations)
+    if sched == 'full':
+        s.test_interval = 100  # Test after every 500 training iterations.
+        s.test_iter[0] = 100 # Test on 100 batches each time we test.
+        s.max_iter = 10000     # no. of times to update the net (training iterations)
+
+        # # Snapshots are files used to store networks we've trained.
+        # # We'll snapshot every 5K iterations -- twice during training.
+        s.snapshot = 1000
+    elif sched == 'short':
+        s.test_interval = 10  # Test after every 500 training iterations.
+        s.test_iter[0] = 100 # Test on 100 batches each time we test.
+        s.max_iter = 100     # no. of times to update the net (training iterations)
+        s.snapshot = 10      # snapshot weights every N iterations
+    elif sched == 'test':
+        s.test_interval = 1  # Test after every 500 training iterations.
+        s.test_iter[0] = 1 # Test on 100 batches each time we test.
+        s.max_iter = 1     # no. of times to update the net (training iterations)
+        s.snapshot = 1      # snapshot weights every N iterations
+    else:
+        raise NameError('Unknown Schedule \'%s\''%sched)
+
+    if snapshot_prefix:
+        s.snapshot_prefix = os.path.join(args.out_dir, snapshot_prefix)
      
     # # EDIT HERE to try different solvers
     # # solver types include "SGD", "Adam", and "Nesterov" among others.
@@ -105,23 +224,25 @@ def set_solver(param, prec):
     # # Display the current training loss and accuracy every 1000 iterations.
     # s.display = 1000
 
-    # # Snapshots are files used to store networks we've trained.
-    # # We'll snapshot every 5K iterations -- twice during training.
-    s.snapshot = 10
-    if snapshot_prefix:
-        s.snapshot_prefix = snapshot_prefix
 
     # # Train on the GPU
     # s.solver_mode = caffe_pb2.SolverParameter.GPU
 
     # Write the solver to a temporary file and return its filename.
-    with open(out_solver_config_path, 'w') as f:
+    with open(solver_file, 'w') as f:
         f.write(str(s))
 
-def solve(solver, niter, test_interval ):
+def solve(solver, solver_param):
 
-    train_loss = list()
-    test_acc = list()
+    train_loss = []
+    test_acc = []
+    test_loss = []
+
+    niter           = solver_param.max_iter
+    test_interval   = solver_param.test_interval
+    test_iter       = solver_param.test_iter[0]
+
+    netproto = read_net_prototxt(solver_param.net)
 
     # the main solver loop
     for it in range(niter):
@@ -130,86 +251,218 @@ def solve(solver, niter, test_interval ):
         # store the train loss
         # [()] extracts scalar from 0d array
         train_loss.append( solver.net.blobs['loss'].data[()] )
-        print 'Train Loss =',train_loss[-1]
+        # print 'Train Loss =',train_loss[-1]
         
+        # test_net = solver.test_net[0]
+        test_net = solver.net
+
         # run a full test every so often
         # (Caffe can also do this for us and write to a log, but we show here
         #  how to do it directly in Python, where more complicated things are easier.)
         if it % test_interval == 0:
-            print 'Iteration', it, 'testing...'
-            correct = 0
-            acc = list()
-            for test_it in range(100):
-                solver.test_nets[0].forward() # run inference on batch
-                acc.append(solver.test_nets[0].blobs['accuracy'].data)
+            acc = []
+            loss = []
+            test_bin_freq = dict()
+            for test_it in range(test_iter):
+                test_net.forward() # run inference on batch
+                test_net.backward() # run backprop to compute gradients
+
+                get_net_blob_stats(test_net, solver_param.net)
+                
+                # examine quantized data:
+                if args.itemfreq:
+                    for layer in netproto.layer:
+                        if layer.type in ['Convolution','InnerProduct']:
+
+                            if layer.fwd_act_precision_param.precision:
+                                data = test_net.blobs[layer.bottom[0]].data
+                            elif layer.fwd_wgt_precision_param.precision:
+                                data = test_net.params[layer.name][0].data
+                            elif layer.bwd_grd_precision_param.precision:
+                                data = test_net.blobs[layer.name].diff
+                            else:
+                                data = 0
+
+                            freq = itemfreq(data)
+                            if layer.name not in test_bin_freq:
+                                test_bin_freq[layer.name] = freq
+                            else:
+                                test_bin_freq[layer.name]  = add_itemfreq(test_bin_freq[layer.name], freq)
+
+                acc.append( test_net.blobs['accuracy'].data )
+                loss.append(test_net.blobs['loss'].data[()] )
+
             test_acc.append( np.mean(acc) )
-            print 'Test Accuracy =',test_acc[-1]
+            test_loss.append( np.mean(loss) )
+            print 'Iteration %5d Test Accuracy =' % it, test_acc[-1], 'Test Loss =', test_loss[-1]
+
+            if args.itemfreq:
+                for k in test_bin_freq.keys():
+                    print 'bin_freq', k
+                    print test_bin_freq[k][:,0]
+                    print test_bin_freq[k][:,1].astype(int)
+
+                fname = out_dir + '/itemfreq-%s-%s-%s.npy'%(param,prec,it)
+                print 'writing itemfreqs to', fname
+                with open(fname, 'w') as f:
+                    pickle.dump(test_bin_freq, f)
+
+            global stats_per_blob
+            stats_per_blob.end_iter()
 
     return test_acc, train_loss
 
-def plot_acc_loss(test_acc, train_loss, test_interval, title):
+def add_itemfreq(f1, f2):
+    f = np.array(f1)
+    for row in f2:
+        item, count = row
+        if item in f[:,0]:
+            for r, row1 in enumerate(f):
+                if item == row1[0]:
+                    f[r,1] += count
+        else:
+            f = np.concatenate( (f, [row]) )
+    f = f[f[:,0].argsort()] # sort by first column
+    return f
 
-    _, ax1 = plt.subplots()
+def myhisto(d):
+    return np.histogram(d, bins=100, normed=True)
 
-    ax2 = ax1.twinx()
-    ax1.plot( np.arange(len(train_loss)), train_loss)
-    ax2.plot( test_interval * np.arange(len(test_acc)), test_acc, 'r')
-    ax1.set_xlabel('iteration')
-    ax1.set_ylabel('train loss')
-    ax2.set_ylabel('test accuracy')
-    ax2.set_title('{} Test Accuracy: {:.2f}'.format(title, test_acc[-1]))
+def get_net_blob_stats(net, net_proto_file):
 
-# print 'debug exit'
-# sys.exit()
+    proto = read_net_prototxt(net_proto_file)
+
+    global stats_per_blob
+
+    cdfs = dict()
+
+    for name in net.params:
+
+        cdfs[name] = dict()
+
+        # weights
+        stats_per_blob.append_array_stats(name + '-wgt_data', net.params[name][0].data)
+        stats_per_blob.append_array_stats(name + '-wgt_diff', net.params[name][0].diff)
+
+        # input activations
+        bottom = []
+        for l in proto.layer:
+            if l.name == name:
+                for b in l.bottom:
+                    bottom.append(b)
+
+        assert len(bottom) == 1, 'multiple bottoms'
+        bottom = bottom[0]
+
+        stats_per_blob.append_array_stats(name + '-act_in_data', net.blobs[bottom].data)
+        stats_per_blob.append_array_stats(name + '-act_in_diff', net.blobs[bottom].diff)
+
+        # output activations
+        stats_per_blob.append_array_stats(name + '-act_out_data', net.blobs[name].data)
+        stats_per_blob.append_array_stats(name + '-act_out_diff', net.blobs[name].diff)
+
+        if args.histo:
+            cdfs[name]['fwd_wgt'] = myhisto(net.params[name][0].data)
+            cdfs[name]['fwd_act'] = myhisto(net.blobs[bottom].data)
+            cdfs[name]['bwd_grd'] = myhisto(net.blobs[name].diff)
+
+    if args.histo:
+        dumpfile = 'histograms.pickle'
+        print 'writing histograms to', dumpfile
+        with open(dumpfile,'w') as f:
+            pickle.dump(cdfs, f)
+
+def debug_exit(s):
+    print 'debug exit: %s' % s
+    sys.exit()
 
 #################################### MAIN #####################################
 
-args = parse_args()
+if __name__ == '__main__':
 
-if not args.out_dir:
-    out_dir = './'
-else:
-    out_dir = args.out_dir
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    args = parse_args()
 
-train_net_path          = args.train_net
-test_net_path           = args.test_net
-solver_config_path      = args.solver
-snapshot_prefix         = args.snapshot_prefix
-out_solver_config_path  = out_dir + '/temp_solver.prototxt'
-out_net_proto_path      = out_dir + '/temp_net.prototxt'
-out_plot_prefix         = out_dir + '/' + args.save_plot
+    if not args.out_dir:
+        out_dir = './'
+    else:
+        out_dir = args.out_dir
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
 
-accs = []
-losses = []
+    train_net_path          = args.train_net
+    test_net_path           = args.test_net
+    solver_config_path      = args.solver
+    snapshot_prefix         = args.snapshot_prefix
+    out_solver_config_path  = out_dir + '/temp_solver.prototxt'
+    out_net_proto_path      = out_dir + '/temp_net.prototxt'
+
+    accs = []
+    losses = []
+
+    caffe.set_mode_gpu()
+    caffe.set_device(0)
 
 
-for param in ['fwd_act','fwd_wgt','bwd_act','bwd_wgt','bwd_grd']:
-    for prec in range(1,8):
-
-        print 'experiment: %s %s\n\n'%(param, prec)
-
-        set_solver(param, prec)
-
-        ### load the solver and create train and test nets
+    if args.baseline:
+        print 'running solver at full precision'
         solver = None  # ignore this workaround for lmdb data (can't instantiate two solvers on the same data)
-        solver = caffe.get_solver(out_solver_config_path)
+        solver = caffe.get_solver(solver_config_path)
+        solver_param = read_solver_parameter(solver_config_path)
 
-        ### solve
-        niter = 20  
-        test_interval = niter/10
+        stats_per_blob = dist_stats.distStatsMap()
 
-        test_acc, train_loss = solve(solver, niter, test_interval)
+        test_acc, train_loss = solve(solver, solver_param)
 
-        plot_acc_loss(test_acc, train_loss, test_interval, '%s %s'%(param,prec) )
+        print "RESULT test_acc",test_acc
+        print "RESULT train_loss",train_loss
+        # print stats_per_blob
 
-        if args.show_plot:
-            plt.show()
+        dumpfile = out_dir + '/stats.pickle'
+        print 'saving stats to', dumpfile
+        stats_per_blob.dump_aggregate_pickle(dumpfile)
 
-        if args.save_plot:
-            outfile = "%s-%s-%s.pdf"%(out_plot_prefix, param, prec)
-            print "saving plot to", outfile
-            plt.savefig(outfile, format='pdf', dpi=1000)
+    else:
+        for prec in range(2,17):
+            # for param in ['fwd_act','fwd_wgt','bwd_act','bwd_wgt','bwd_grd']:
+            for param in ['fwd_act','fwd_wgt','bwd_grd']:
+            # for param in ['bwd_grd']:
+
+                scale = 2**prec
+                # if 'wgt' in param:
+                    # scale  = 2**prec
+
+                print 'experiment: %s %s %s\n\n'%(param, prec, scale)
+
+                # update solver
+                set_solver(param, prec, scale, out_solver_config_path, sched=args.sched)
+
+                ### load the solver and create train and test nets
+                solver = None  # ignore this workaround for lmdb data (can't instantiate two solvers on the same data)
+                solver = caffe.get_solver(out_solver_config_path)
+                solver_param = read_solver_parameter(out_solver_config_path)
+
+                stats_per_blob = dist_stats.distStatsMap()
+
+                test_acc, train_loss = solve(solver, solver_param)
+
+                print "RESULT test_acc",test_acc
+                # print "RESULT train_loss",train_loss
+                # print stats_per_blob
+
+                plot_acc_loss.plot_acc_loss(test_acc, train_loss, '%s %s'%(param,prec) )
+
+                np.save(out_dir + '/test_acc-%s-%s.npy'%(param,prec),   test_acc)
+                np.save(out_dir + '/train_loss-%s-%s.npy'%(param,prec), train_loss)
+
+                if args.show_plot:
+                    plt.show()
+
+                if args.save_plot:
+                    outfile = "%s/plot-%s-%s.pdf"%(out_dir, param, prec)
+                    print "saving plot to", outfile
+                    plt.savefig(outfile, format='pdf', dpi=1000)
+
+                if args.sched == 'test':
+                    debug_exit('test schedule: only one iteration')
 
 
