@@ -5,6 +5,9 @@
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/util/reduce_precision.hpp"
 
+#ifndef MYDEBUG 
+#define MYDEBUG 0
+#endif
 
 namespace caffe {
 
@@ -12,12 +15,27 @@ namespace caffe {
 template <typename Dtype>
 void reduce_precision_blob_gpu(Blob<Dtype> & blob, 
       const PrecisionParameter & param, bool diff, const char * name){
-    // std::cout << name << " " << param.precision() 
-    //    << " " << param.scale() << std::endl;
+
+    if (param.precision() == 0)
+      return;
+
+#if MYDEBUG
+
+    int start=0;
+    int end=blob.count();
+     std::cout << name << " " << param.precision() 
+        << " " << param.scale() << std::endl;
+
+    for (int i=start; i<end ; i++){
+      std::cout << name << "\tIN\t" << i << "\t" << blob.cpu_data()[i] << std::endl;
+    }
+
+#endif
 
     // if precision is the default value (0), dont touch the blob
     // 0 is not a valid precision
     if (param.precision() != 0){
+      /*std::cout << name << "\t reducing precision to " << param.precision() << " with scaling " << param.scale() << "\n";*/
       reduce_precision_gpu(
           (diff)? blob.mutable_gpu_diff() : blob.mutable_gpu_data(), 
           blob.count(), 
@@ -25,6 +43,16 @@ void reduce_precision_blob_gpu(Blob<Dtype> & blob,
           param.scale()
           );
     }
+    /*std::cout << "CAFFE CPU DATA\t" << blob.cpu_data()[0] << std::endl;*/
+
+#if MYDEBUG
+
+    for (int i=start; i<end ; i++){
+      std::cout << name << "\tOUT\t" << i << "\t" << blob.cpu_data()[i] << std::endl;
+    }
+
+#endif
+
 }
 
 template <typename Dtype>

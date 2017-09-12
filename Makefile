@@ -24,6 +24,11 @@ else
 	OTHER_BUILD_DIR := $(DEBUG_BUILD_DIR)
 endif
 
+MYDEBUG ?= 0
+ifeq ($(MYDEBUG), 1)
+	COMMON_FLAGS += -DMYDEBUG=1
+endif
+
 # All of the directories containing code.
 SRC_DIRS := $(shell find * -type d -exec bash -c "find {} -maxdepth 1 \
 	\( -name '*.cpp' -o -name '*.proto' \) | grep -q ." \; -print)

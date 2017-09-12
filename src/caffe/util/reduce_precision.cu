@@ -9,12 +9,19 @@ template <typename Dtype>
 __global__ void reduce_precision_gpu_kernel(Dtype* data, size_t size, const unsigned int prec, const float scale) {
   CUDA_KERNEL_LOOP(index, size) {
     Dtype d = data[index];
-    d = d * scale;
-    Dtype dmax = (1 << (prec-1)) - 1; // e.g. 127 =  01111111
-    Dtype dmin = - (1 << (prec-1));   //     -128 = -10000000
+    Dtype shift = 0.0;
+    Dtype dmax =   (1 << (prec-1)) - 1 + shift; // e.g. prec = 2, dmin,dmax = -1,1
+    Dtype dmin = - (1 << (prec-1)) + 1 + shift; 
+
+    d *= scale;
+
     if (d > dmax) d = dmax;
     if (d < dmin) d = dmin;
-    d = Dtype(int(d));
+
+    d += shift;
+    d = Dtype(round(d));
+    d -= shift;
+
     d = d / scale;
     data[index] = d;
   }
