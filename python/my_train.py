@@ -12,7 +12,7 @@ from google.protobuf import text_format
 import plot_acc_loss
 import dist_stats
 import pickle
-from scipy.stats import itemfreq
+from scipy.stats import itemfreq, norm
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,45 +45,97 @@ def read_net_prototxt(filename):
         text_format.Merge(str(f.read()), netproto)
     return netproto
 
-def imbalance(vec):
+def imbalance(vec, dist='uniform'):
     l = len(vec)
-    target = 1./l
-    abs_diff = [ abs (v - target) for v in vec ]
-    sad = sum(abs_diff)
+    if dist == 'uniform':
+        target = 1./l
+        abs_diff = [ abs (v - target) for v in vec ]
+        sad = sum(abs_diff)
+    elif dist == 'normal':
+        # fit to normal distribution with std=1
+        # TODO: should std scale with precision?
+        x = [-np.inf] +  list(np.arange( -(l/2)+0.5, l/2+0.5 )) + [np.inf] # [-inf, -0.5, 0.5, inf]
+        y = norm.cdf(x, scale=1) # slice cdf into bins
+        target = np.diff(y) # 
+        sad = sum(abs(vec - target))
+    else:
+        raise TypeError, 'Unknown distribution %s' % dist
+    
     return sad
 
-def scale_by_histo(prec, histo, layer_name, blob_name):
-    print 'layer_name=',layer_name
-    print 'blob_name=',blob_name
+def quantize_cdf(prec, scale, cdf, bins):
+
+    abs_max = float( 2 ** (prec-1) - 1 ) / scale
+    nlevels = 2 ** (prec) - 1
+    i = np.arange(0,nlevels+1)
+    level_edges = -abs_max + 2. * i / nlevels * abs_max
+    # print 'level_edges=',level_edges 
+
+    bin_edges = [max(0, np.argmax(bins >= l)-1) for l in level_edges]
+    bin_edges[0] = 0
+    bin_edges[-1] = len(bins)-1
+    # print 'bin_edges=',bin_edges 
+
+    cumpop = cdf[bin_edges]
+    # print 'cumpop=' ,cumpop 
+    pop = np.diff(cumpop)
+
+    return pop, bin_edges
+
+def scale_by_histo(prec, histo, layer_name, blob_name, byrange=False):
+    print 'layer_name =',layer_name
+    print 'blob_name =',blob_name
     counts, bins = histo[layer_name][blob_name]
-    print 'count=',counts
-    print 'bin=',bins
+    # print 'count=',counts
+    # print 'bin=',bins
     cdf = np.cumsum(counts)
     cdf = cdf/cdf[-1] # normalize to 1
-    print 'cdf=',cdf 
-    nbins = 2 ** (prec) - 1
-    print 'nbins=',nbins 
+    cdf = np.insert(cdf, 0, 0)
+    # print 'cdf=',cdf 
 
-    
-    thresholds = np.arange(1. , nbins)/nbins # 2 bits, 3 bins, [1/3, 2/3]
-    print 'thresholds=',thresholds 
-    edges = [np.argmax(cdf > t) for t in thresholds]
-    print 'edges=',edges
-    edgevals = bins[edges]
-    print 'edgevals=',edgevals 
+    nbins = len(bins)
 
-    if not np.any(edges):
-        range = bins[-1]
-    elif bins[0] >= 0:
-        avg_binsize = np.diff(edgevals).mean()
-        range = avg_binsize * nbins 
+    abs_max = max( abs(bins[0]), abs(bins[-1]) )
+    # print 'abs_max=',abs_max 
+
+    scales = []
+    imbas = []
+
+    if byrange:
+        print 'scaling by range'
+        trails = 1
     else:
-        avg_binsize = np.diff(edgevals).mean()
-        range = avg_binsize * nbins / 2
+        print 'balancing quantization bins'
+        trails = 1000
 
-    print 'range=',range
-    scale = float( 2 ** (prec-1) - 1 ) / range
-    print 'scale=',scale 
+    for j in np.arange(trails):
+        scale = float( 2 ** (prec-1) - 1 ) / abs_max
+        # print 'scale=',scale 
+
+        pop, bin_edges = quantize_cdf(prec, scale, cdf, bins)
+        # imba = imbalance(pop, dist='normal')
+        imba = imbalance(pop, dist='uniform')
+        # print 'imba=',imba 
+
+        if imbas and imba > imbas[-1]:
+            print 'iteration %d: imba started increasing %f -> %f ' % (j,imbas[-1],imba)
+            break
+
+        scales.append(scale)
+        imbas.append(imba)
+
+        n = len(bin_edges)
+        if bin_edges[n/2-1] == bin_edges[n/2]:
+            print 'iteration %d: bins converged' % j
+            break
+
+        abs_max  = abs_max * 0.99
+
+    scale = scales[np.argmin(imbas)] # choose the scale with the least imbalance
+
+    print 'scale =',scale, '@ imba =',min(imbas)
+    pop, bin_edges = quantize_cdf(prec, scale, cdf, bins)
+    print 'balanced quantization:', pop
     return scale
 
 
@@ -96,7 +148,7 @@ def scale_by_range(stats, layer_name, blob_name):
     dmax = stats[stat_name]['max'][0]
     std  = stats[stat_name]['std'][-1]
     abs_max = max( abs(dmin), abs(dmax) )
-    scale = float( 2 ** (prec-1) - 1 ) / ( abs_max * 2)
+    scale = float( 2 ** (prec-1) - 1 ) / abs_max
     # scale = float( 2 ** (prec-1) - 1 ) / std
     return scale
 
@@ -139,12 +191,12 @@ def set_solver(param, prec, scale, solver_file, sched='full'):
             # support substring matching
             # param='act' will set both fwd_act and bwd_act
 
-    
-            scale = scale_by_histo(prec, histo, layer.name, param)
+            # we don't want to compress the range of first layer activations
+            first_act = (param in 'fwd_act' and layer.name in 'conv1')
+            scale = scale_by_histo(prec, histo, layer.name, param, byrange=first_act)
             if param in 'fwd_act':
                 layer.fwd_act_precision_param.precision=prec
                 layer.fwd_act_precision_param.scale=scale
-                # layer.fwd_act_precision_param.scale=scale_by_range(stats, layer.name, 'act_in_data')
             if param in 'fwd_wgt':
                 layer.fwd_wgt_precision_param.precision=prec
                 layer.fwd_wgt_precision_param.scale=scale
@@ -298,9 +350,11 @@ def solve(solver, solver_param):
 
             if args.itemfreq:
                 for k in test_bin_freq.keys():
-                    print 'bin_freq', k
-                    print test_bin_freq[k][:,0]
-                    print test_bin_freq[k][:,1].astype(int)
+                    print '               ', k
+                    print 'quantized value', test_bin_freq[k][:,0]
+                    tbf = test_bin_freq[k][:,1]
+                    tbf = tbf / sum(tbf) # normalize
+                    print 'probability    ', tbf
 
                 fname = out_dir + '/itemfreq-%s-%s-%s.npy'%(param,prec,it)
                 print 'writing itemfreqs to', fname
@@ -326,7 +380,7 @@ def add_itemfreq(f1, f2):
     return f
 
 def myhisto(d):
-    return np.histogram(d, bins=100, normed=True)
+    return np.histogram(d, bins=1000, normed=True)
 
 def get_net_blob_stats(net, net_proto_file):
 
@@ -422,10 +476,9 @@ if __name__ == '__main__':
         stats_per_blob.dump_aggregate_pickle(dumpfile)
 
     else:
-        for prec in range(2,17):
+        for prec in range(2,7):
             # for param in ['fwd_act','fwd_wgt','bwd_act','bwd_wgt','bwd_grd']:
             for param in ['fwd_act','fwd_wgt','bwd_grd']:
-            # for param in ['bwd_grd']:
 
                 scale = 2**prec
                 # if 'wgt' in param:
