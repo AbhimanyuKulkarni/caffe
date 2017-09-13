@@ -97,3 +97,7 @@ LOCK
 LOG*
 CURRENT
 MANIFEST-*
+
+# Patrick's ignore file
+results*/
+tags
