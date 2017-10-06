@@ -45,11 +45,15 @@ class distStatsMap:
         for s in self.map.itervalues():
             s.end_iter()
 
-    def dump_aggregate_pickle(self, dumpfile):
-        dump = dict()
+    def aggregate(self):
+        agg = dict()
         for k, v in self.map.iteritems():
             stat_dict = v.get_all_aggregate_stats()
-            dump[k] = stat_dict
+            agg[k] = stat_dict
+        return agg
+
+    def dump_aggregate_pickle(self, dumpfile):
+        dump = self.aggregate()
 
         with open(dumpfile, 'w') as f:
             pickle.dump(dump, f)
