@@ -37,6 +37,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument( "acc_file", nargs="+", help="accuracy npy")
+    parser.add_argument( "--max", action='store_true', help="plot the max accuracy per run")
     args = parser.parse_args()
     
     labels = []
@@ -55,8 +56,10 @@ if __name__ == '__main__':
 
         test_acc = np.load(acc)
 
-        datum = max(test_acc) # use the maximum accuracy for plotting
-        datum = test_acc[-1] # use the maximum accuracy for plotting
+        if (args.max):
+            datum = max(test_acc) # use the maximum accuracy for plotting
+        else:
+            datum = test_acc[-1] # use the maximum accuracy for plotting
 
         print acc, datum
 
@@ -73,10 +76,18 @@ if __name__ == '__main__':
             precs[blob_idx], data[blob_idx] = sorting(precs[blob_idx], data[blob_idx])
 
     print ''
-        
+    
+    # data = [n, x], precs = x, labels = n
     plot_acc_vs_prec(data, precs, labels)
 
-    savefile = os.path.join(dirname, 'acc_vs_prec.pdf')
+    # print csv
+    print '        ,', ','.join(['%6d'%p for p in precs[0]])
+    for row, label in zip(data, labels):
+        print label , ',', 
+        print ','.join(['%.4f'%r for r in row])
+
+    # savefile = os.path.join(dirname, 'acc_vs_prec.pdf')
+    savefile = 'acc_vs_prec.pdf'
     print 'saving figure to', savefile
     plt.savefig(savefile)
         # plt.show()
