@@ -40,39 +40,40 @@ def range(d):
 
 ##################### MAIN ########################################################################
 
+if __name__ == '__main__':
 
-parser = argparse.ArgumentParser(prog='test_net.py', description='Run a network in pycaffe')
-parser.add_argument('-n', dest='network', type=str, default = '', help='network name in model directory. \'all\' to run all networks')
-parser.add_argument('-b', dest='batches', type=int, help='batches to run')
-parser.add_argument('-m', dest='model', type=str, default = '', help='model prototxt')
-parser.add_argument('-w', dest='weights', type=str, default = '', help='weight caffemodel')
+    parser = argparse.ArgumentParser(prog='test_net.py', description='Run a network in pycaffe')
+    parser.add_argument('-n', dest='network', type=str, default = '', help='network name in model directory. \'all\' to run all networks')
+    parser.add_argument('-b', dest='batches', type=int, help='batches to run')
+    parser.add_argument('-m', dest='model', type=str, default = '', help='model prototxt')
+    parser.add_argument('-w', dest='weights', type=str, default = '', help='weight caffemodel')
 
-args = parser.parse_args()
-batches = args.batches
-network = args.network
+    args = parser.parse_args()
+    batches = args.batches
+    network = args.network
 
-if args.network:
-    model = os.path.join(args.network,'train_val.prototxt')
-    weights = os.path.join(args.network,'weights.caffemodel')
-else:
-    model = args.model
-    weights = args.weights
+    if args.network:
+        model = os.path.join(args.network,'train_val.prototxt')
+        weights = os.path.join(args.network,'weights.caffemodel')
+    else:
+        model = args.model
+        weights = args.weights
 
-assert (os.path.exists(model)), "file does not exist"
-assert (os.path.exists(weights)), "file does not exist"
+    assert (os.path.exists(model)), "file does not exist"
+    assert (os.path.exists(weights)), "file does not exist"
 
-sys.path.insert(0, '/home/patrick/python')
+    sys.path.insert(0, '/home/patrick/python')
 
-caffe.set_mode_gpu()
+    caffe.set_mode_gpu()
 
-net_param = read_prototxt(model)
+    net_param = read_prototxt(model)
 
-net = caffe.Net(model, weights, caffe.TEST)
+    net = caffe.Net(model, weights, caffe.TEST)
 
-print 'variables: net, net_param'
-print 'net.layers: vector of layers'
-print '\tlayer: blobs (weights), reshape, setup, type'
-print 'net.params: vector of weight blobs'
-print 'net.blobs: map by layer name'
-print '\tblob: count, shape, data, diff'
+    print 'variables: net, net_param'
+    print 'net.layers: vector of layers'
+    print '\tlayer: blobs (weights), reshape, setup, type'
+    print 'net.params: vector of weight blobs'
+    print 'net.blobs: map by layer name'
+    print '\tblob: count, shape, data, diff'
 
