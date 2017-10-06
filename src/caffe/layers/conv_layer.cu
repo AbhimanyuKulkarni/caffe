@@ -40,7 +40,8 @@ void reduce_precision_blob_gpu(Blob<Dtype> & blob,
           (diff)? blob.mutable_gpu_diff() : blob.mutable_gpu_data(), 
           blob.count(), 
           param.precision(), 
-          param.scale()
+          param.scale(),
+          param.quantizer()
           );
     }
     /*std::cout << "CAFFE CPU DATA\t" << blob.cpu_data()[0] << std::endl;*/
