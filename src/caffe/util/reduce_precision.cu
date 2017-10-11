@@ -31,7 +31,7 @@ __global__ void reduce_precision_gpu_kernel(Dtype* data, size_t size, const unsi
 
     // move near zero values to first non zero bins
     if (zero_bin){
-      if (d > 0 && d < scale)
+      if (d > 0 && d < scale) // is this right?
         d = scale;
       else if (d < 0 && d > -scale)
         d = -scale;
