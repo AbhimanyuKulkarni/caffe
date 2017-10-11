@@ -16,9 +16,9 @@ def exit():
     print 'debug exit'
     sys.exit()
 
-def plot_lines(data, labels, title='', xlabel='', ylabel=''):
+def plot_lines(data, labels, title='', xlabel='', ylabel='', newfig=True):
 
-    if 0:
+    if newfig:
         fig = plt.gcf()
         fig.clear() # overwrite existing figure
 
@@ -30,8 +30,6 @@ def plot_lines(data, labels, title='', xlabel='', ylabel=''):
         plt.plot(vec, label=lab)
 
     plt.legend()
-
-
 
 def plot_dist_stats(stats_map, out_dir):
     """
@@ -57,7 +55,6 @@ def plot_dist_stats(stats_map, out_dir):
         outfile = "%s/plot-%s.pdf"%(out_dir, blob)
         print "saving plot to", outfile
         plt.savefig(outfile, format='pdf', dpi=200)
-
 
 def plot_dist_stats_grid(stats_map):
     ''' plots stat line graphs for blob and layer in a grid'''
@@ -96,6 +93,7 @@ def plot_dist_stats_grid(stats_map):
                     stat_names, 
                     xlabel='test iterations', 
                     title=k,
+                    newfig=False
                 )
 
             # plt.tick_params(axis='y', which='both', left='off', labelleft='off')

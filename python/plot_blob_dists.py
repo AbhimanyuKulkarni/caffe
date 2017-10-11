@@ -10,7 +10,7 @@ import pickle
 
 def plot_blob_dists(net, netproto, distStats=None):
     ''' plots a histogram for each blob and layer '''
-    #plt.clf()
+    plt.clf()
     #plt.ylabel('accuracy')
     #plt.xlabel('precision')
 
