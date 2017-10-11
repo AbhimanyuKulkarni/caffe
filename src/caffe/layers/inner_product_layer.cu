@@ -58,10 +58,17 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
-  const Dtype* weight = this->blobs_[0]->gpu_data();
+  //const Dtype* weight = this->blobs_[0]->gpu_data();
+  Blob<Dtype> * weight = this->blobs_[0].get();
+
+  bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
+  if (!reduce_storage){ // TODO make parameter to reduce storage  
+    weight = new Blob<Dtype>(this->blobs_[0]->shape());
+    weight->CopyFrom(*(this->blobs_[0]));
+  }
 
   // patrickjudd: reduce precision of weights 
-  reduce_precision_blob_gpu<Dtype>( *(this->blobs_[0]),  
+  reduce_precision_blob_gpu<Dtype>( *weight,  
       this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt");
   // patrickjudd: reduce precision of activations 
   reduce_precision_blob_gpu<Dtype>( *bottom[0],
@@ -69,7 +76,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 
   if (M_ == 1) {
     caffe_gpu_gemv<Dtype>(CblasNoTrans, N_, K_, (Dtype)1.,
-                         weight, bottom_data, (Dtype)0., top_data);
+                         weight->gpu_data(), bottom_data, (Dtype)0., top_data);
     if (bias_term_)
       caffe_gpu_axpy<Dtype>(N_, bias_multiplier_.cpu_data()[0],
                             this->blobs_[1]->gpu_data(), top_data);
@@ -77,11 +84,14 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     caffe_gpu_gemm<Dtype>(CblasNoTrans,
                           transpose_ ? CblasNoTrans : CblasTrans,
                           M_, N_, K_, (Dtype)1.,
-                          bottom_data, weight, (Dtype)0., top_data);
+                          bottom_data, weight->gpu_data(), (Dtype)0., top_data);
     if (bias_term_)
       caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, M_, N_, 1, (Dtype)1.,
                             bias_multiplier_.gpu_data(),
                             this->blobs_[1]->gpu_data(), (Dtype)1., top_data);
+  }
+  if (!reduce_storage){
+    delete weight;
   }
 }
 
@@ -90,8 +100,16 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down,
     const vector<Blob<Dtype>*>& bottom) {
 
+  Blob<Dtype> * weight = this->blobs_[0].get();
+
+  bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
+  if (!reduce_storage){ // TODO make parameter to reduce storage  
+    weight = new Blob<Dtype>(this->blobs_[0]->shape());
+    weight->CopyFrom(*(this->blobs_[0]));
+  }
+
   // patrickjudd: reduce precision of weights
-  reduce_precision_blob_gpu<Dtype>( *(this->blobs_[0]),
+  reduce_precision_blob_gpu<Dtype>( *weight,
       this->layer_param_.bwd_wgt_precision_param(), 0/*diff*/, "bwd_wgt");
   // patrickjudd: reduce precision of activations and gradients
   reduce_precision_blob_gpu<Dtype>( *bottom[0],
@@ -128,14 +146,17 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     if (transpose_) {
       caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans,
           M_, K_, N_,
-          (Dtype)1., top_diff, this->blobs_[0]->gpu_data(),
+          (Dtype)1., top_diff, weight->gpu_data(),
           (Dtype)0., bottom[0]->mutable_gpu_diff());
     } else {
       caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans,
           M_, K_, N_,
-         (Dtype)1., top_diff, this->blobs_[0]->gpu_data(),
+         (Dtype)1., top_diff, weight->gpu_data(),
          (Dtype)0., bottom[0]->mutable_gpu_diff());
     }
+  }
+  if (!reduce_storage){
+    delete weight;
   }
 }
 

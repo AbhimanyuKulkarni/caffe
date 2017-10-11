@@ -1434,4 +1434,6 @@ message PrecisionParameter {
   // 2: mid tread with a symmetric range (odd number of bins)
   // 3: 2 with a squished zero bin for only 0 values
   optional int32 quantizer = 3 [default = 2];
+  // store the data in reduced precision, or just before compute
+  optional bool store_reduced = 4 [default = true];
 }

@@ -59,10 +59,17 @@ void reduce_precision_blob_gpu(Blob<Dtype> & blob,
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  const Dtype* weight = this->blobs_[0]->gpu_data();
+  //boost::shared_ptr< Blob<Dtype> > weight = this->blobs_[0];
+  Blob<Dtype> * weight = this->blobs_[0].get();
+
+  bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
+  if (!reduce_storage){ // TODO make parameter to reduce storage  
+    weight = new Blob<Dtype>(this->blobs_[0]->shape());
+    weight->CopyFrom(*(this->blobs_[0]));
+  }
 
   // patrickjudd: reduce precision of weights 
-  reduce_precision_blob_gpu<Dtype>( *(this->blobs_[0]),  
+  reduce_precision_blob_gpu<Dtype>( *weight,  
       this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt");
 
   for (int i = 0; i < bottom.size(); ++i) {
@@ -74,7 +81,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 
     Dtype* top_data = top[i]->mutable_gpu_data();
     for (int n = 0; n < this->num_; ++n) {
-      this->forward_gpu_gemm(bottom_data + n * this->bottom_dim_, weight,
+      this->forward_gpu_gemm(bottom_data + n * this->bottom_dim_, weight->gpu_data(),
           top_data + n * this->top_dim_);
       if (this->bias_term_) {
         const Dtype* bias = this->blobs_[1]->gpu_data();
@@ -82,16 +89,27 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       }
     }
   }
+  if (!reduce_storage){
+    delete weight;
+  }
 }
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-  const Dtype* weight = this->blobs_[0]->gpu_data();
+  //const Dtype* weight = this->blobs_[0]->gpu_data();
+  Blob<Dtype> * weight = this->blobs_[0].get();
+
+  bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
+  if (!reduce_storage){ // TODO make parameter to reduce storage  
+    weight = new Blob<Dtype>(this->blobs_[0]->shape());
+    weight->CopyFrom(*(this->blobs_[0]));
+  }
+
   Dtype* weight_diff = this->blobs_[0]->mutable_gpu_diff();
 
   // patrickjudd: reduce precision of weights
-  reduce_precision_blob_gpu<Dtype>( *(this->blobs_[0]),
+  reduce_precision_blob_gpu<Dtype>( *weight,
       this->layer_param_.bwd_wgt_precision_param(), 0/*diff*/, "bwd_wgt");
 
   for (int i = 0; i < top.size(); ++i) {
@@ -121,11 +139,14 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         }
         // gradient w.r.t. bottom data, if necessary.
         if (propagate_down[i]) {
-          this->backward_gpu_gemm(top_diff + n * this->top_dim_, weight,
+          this->backward_gpu_gemm(top_diff + n * this->top_dim_, weight->gpu_data(),
               bottom_diff + n * this->bottom_dim_);
         }
       }
     }
+  }
+  if (!reduce_storage){
+    delete weight;
   }
 }
 
