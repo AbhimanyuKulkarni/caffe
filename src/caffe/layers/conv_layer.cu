@@ -14,7 +14,7 @@ namespace caffe {
 // patrickjudd: helper function for setting precision of blobs 
 template <typename Dtype>
 void reduce_precision_blob_gpu(Blob<Dtype> & blob, 
-      const PrecisionParameter & param, bool diff, const char * name){
+      const PrecisionParameter & param, bool diff, const char * name, const bool quantize){
 
     if (param.precision() == 0)
       return;
@@ -41,7 +41,9 @@ void reduce_precision_blob_gpu(Blob<Dtype> & blob,
           blob.count(), 
           param.precision(), 
           param.scale(),
-          param.quantizer()
+          param.quantizer(),
+          quantize,
+          1 // round
           );
     }
     /*std::cout << "CAFFE CPU DATA\t" << blob.cpu_data()[0] << std::endl;*/
@@ -62,22 +64,28 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   //boost::shared_ptr< Blob<Dtype> > weight = this->blobs_[0];
   Blob<Dtype> * weight = this->blobs_[0].get();
 
+  // patrickjudd: don't reduce precision on the stored weights
+  // instead, make a copy, reduce precision, and use that for the forward pass
   bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
-  if (!reduce_storage){ // TODO make parameter to reduce storage  
+  if (!reduce_storage){ 
+    // clip weights 
+    reduce_precision_blob_gpu<Dtype>( *(this->blobs_[0]),  
+        this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt", 0/*quantize*/);
+
     weight = new Blob<Dtype>(this->blobs_[0]->shape());
     weight->CopyFrom(*(this->blobs_[0]));
   }
 
   // patrickjudd: reduce precision of weights 
   reduce_precision_blob_gpu<Dtype>( *weight,  
-      this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt");
+      this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt", 1/*quantize*/);
 
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->gpu_data();
 
     // patrickjudd: reduce precision of activations 
     reduce_precision_blob_gpu<Dtype>( *bottom[i],
-        this->layer_param_.fwd_act_precision_param(), 0/*diff*/, "fwd_act");
+        this->layer_param_.fwd_act_precision_param(), 0/*diff*/, "fwd_act", 1/*quantize*/);
 
     Dtype* top_data = top[i]->mutable_gpu_data();
     for (int n = 0; n < this->num_; ++n) {
@@ -100,8 +108,8 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   //const Dtype* weight = this->blobs_[0]->gpu_data();
   Blob<Dtype> * weight = this->blobs_[0].get();
 
-  bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
-  if (!reduce_storage){ // TODO make parameter to reduce storage  
+  bool reduce_storage = this->layer_param_.bwd_wgt_precision_param().store_reduced();
+  if (!reduce_storage){ 
     weight = new Blob<Dtype>(this->blobs_[0]->shape());
     weight->CopyFrom(*(this->blobs_[0]));
   }
@@ -110,16 +118,16 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
   // patrickjudd: reduce precision of weights
   reduce_precision_blob_gpu<Dtype>( *weight,
-      this->layer_param_.bwd_wgt_precision_param(), 0/*diff*/, "bwd_wgt");
+      this->layer_param_.bwd_wgt_precision_param(), 0/*diff*/, "bwd_wgt", 1/*quantize*/);
 
   for (int i = 0; i < top.size(); ++i) {
     const Dtype* top_diff = top[i]->gpu_diff();
 
     // patrickjudd: reduce precision of activations and gradients
     reduce_precision_blob_gpu<Dtype>( *bottom[i],
-        this->layer_param_.bwd_act_precision_param(), 0/*diff*/, "bwd_act");
+        this->layer_param_.bwd_act_precision_param(), 0/*diff*/, "bwd_act", 1/*quantize*/);
     reduce_precision_blob_gpu<Dtype>( *top[i],
-        this->layer_param_.bwd_grd_precision_param(), 1/*diff*/, "bwd_grd");
+        this->layer_param_.bwd_grd_precision_param(), 1/*diff*/, "bwd_grd", 1/*quantize*/);
 
     // Bias gradient, if necessary.
     if (this->bias_term_ && this->param_propagate_down_[1]) {

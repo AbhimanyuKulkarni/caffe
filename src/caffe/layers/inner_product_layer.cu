@@ -14,7 +14,7 @@ namespace caffe {
 // patrickjudd: helper function for setting precision of blobs 
 template <typename Dtype>
 void reduce_precision_blob_gpu(Blob<Dtype> & blob, 
-      const PrecisionParameter & param, bool diff, const char * name){
+      const PrecisionParameter & param, bool diff, const char * name, const bool quantize){
 
     if (param.precision() == 0)
       return;
@@ -40,7 +40,9 @@ void reduce_precision_blob_gpu(Blob<Dtype> & blob,
           blob.count(), 
           param.precision(), 
           param.scale(),
-          param.quantizer()
+          param.quantizer(),
+          quantize,
+          1 //round
           );
     }
 
@@ -62,17 +64,22 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   Blob<Dtype> * weight = this->blobs_[0].get();
 
   bool reduce_storage = this->layer_param_.fwd_wgt_precision_param().store_reduced();
-  if (!reduce_storage){ // TODO make parameter to reduce storage  
+  //printf("reduce_storage = %d prec = %d\n",reduce_storage, this->layer_param_.fwd_wgt_precision_param().precision());
+  if (!reduce_storage){ 
+    // clip weights 
+    reduce_precision_blob_gpu<Dtype>( *(this->blobs_[0]),  
+        this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt_clip", 0/*quantize*/);
+
     weight = new Blob<Dtype>(this->blobs_[0]->shape());
     weight->CopyFrom(*(this->blobs_[0]));
   }
 
   // patrickjudd: reduce precision of weights 
   reduce_precision_blob_gpu<Dtype>( *weight,  
-      this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt");
+      this->layer_param_.fwd_wgt_precision_param(), 0/*diff*/, "fwd_wgt", 1);
   // patrickjudd: reduce precision of activations 
   reduce_precision_blob_gpu<Dtype>( *bottom[0],
-      this->layer_param_.fwd_act_precision_param(), 0/*diff*/, "fwd_act");
+      this->layer_param_.fwd_act_precision_param(), 0/*diff*/, "fwd_act", 1);
 
   if (M_ == 1) {
     caffe_gpu_gemv<Dtype>(CblasNoTrans, N_, K_, (Dtype)1.,
@@ -110,12 +117,12 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
   // patrickjudd: reduce precision of weights
   reduce_precision_blob_gpu<Dtype>( *weight,
-      this->layer_param_.bwd_wgt_precision_param(), 0/*diff*/, "bwd_wgt");
+      this->layer_param_.bwd_wgt_precision_param(), 0/*diff*/, "bwd_wgt", 1);
   // patrickjudd: reduce precision of activations and gradients
   reduce_precision_blob_gpu<Dtype>( *bottom[0],
-      this->layer_param_.bwd_act_precision_param(), 0/*diff*/, "bwd_act");
+      this->layer_param_.bwd_act_precision_param(), 0/*diff*/, "bwd_act", 1);
   reduce_precision_blob_gpu<Dtype>( *top[0],
-      this->layer_param_.bwd_grd_precision_param(), 1/*diff*/, "bwd_grd");
+      this->layer_param_.bwd_grd_precision_param(), 1/*diff*/, "bwd_grd", 1);
 
   if (this->param_propagate_down_[0]) {
     const Dtype* top_diff = top[0]->gpu_diff();

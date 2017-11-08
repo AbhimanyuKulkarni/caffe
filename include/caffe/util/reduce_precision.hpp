@@ -4,7 +4,7 @@
 namespace caffe {
 
 template <typename Dtype>
-void reduce_precision_gpu(Dtype* data, size_t size, const unsigned int prec, const float scale, const int quantizer);
+void reduce_precision_gpu(Dtype* data, size_t size, const unsigned int prec, const float scale, const int quantizer, const bool quantize=1, const bool round=1);
 
 }  // namespace caffe
 
