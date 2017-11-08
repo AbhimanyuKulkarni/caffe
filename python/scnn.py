@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+import scipy.signal
 import os
 import sys
 import re
@@ -23,6 +24,8 @@ def get_default_config():
     Ht: 8
     Wt: 8
     Kt: 64
+    I: 4
+    F: 4
     """
     config = yaml.load(doc)
     return config
@@ -46,23 +49,34 @@ def read_trace_params(param_filename, layer):
 def create_idxmap(d):
     s = list(d.shape)
     s.append(len(s))
-    idxmap = np.zeros(s)
+    idxmap = np.zeros(s).astype(int)
     for i in range(s[0]):
         for j in range(s[1]):
             idxmap[i,j] = [i,j]
     return idxmap
 
-def process_tile(act_data, wgt_data):
+def gen_random_data():
+    a = np.random.randint(0,10,(10,10))
+    w = np.random.randint(0,10,(3,3))
+    return a,w
 
-    print 'act', act_data.shape
-    print 'wgt', wgt_data.shape
-    time = 0
+def desparsify(data, idx):
+    nz = np.where(data != 0)
+    do = data[nz]
+    io = idx[nz]
+    return do, io
+
+def map_accumulator(x,y,X,Y,N):
+    ''' map output (x,y) from (X,Y) to one of N accumulator banks '''
+    return (x * Y + y) % N
+
+def process_tile(act_data, wgt_data, config, dims, mode='time'):
+
+    (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
 
     # create index map
     act_idx = create_idxmap(act_data)
     wgt_idx = create_idxmap(wgt_data)
-    print act_idx
-    print wgt_idx
 
     # linearize tile
     actsize = act_data.size
@@ -73,28 +87,104 @@ def process_tile(act_data, wgt_data):
     wgt_idx = wgt_idx.reshape((wgtsize,-1))
     print act_data
     print act_idx.T
+    print wgt_data
+    print wgt_idx.T
 
     # deparsify
+    wgt_data, wgt_idx = desparsify(wgt_data,wgt_idx)
+    act_data, act_idx = desparsify(act_data,act_idx)
+    print act_data
+    print act_idx.T
+    print wgt_data
+    print wgt_idx.T
 
     # chunk into 4
+    F,I = [config[k] for k in ['F','I']]
+    count = 0
+    time = 0
+    mult_count = 0
+    warp_count = 0 # number of IxF cross products
+    
+    if mode == 'compute':
+        out_data = np.zeros((X,Y))
 
-    # compute coordinates
+    for i in range(0, len(act_data), I):
+        for f in range(0, len(wgt_data), F):
+            warp_count += 1
 
-    # map to accumulators
+            # each cycle
+            acc = np.zeros(2*F*I)
+            for ii in range(i,min(i+I,len(act_data))):
+                for ff in range(f,min(f+F,len(wgt_data))):
+                    h,w = act_idx[ii]
+                    r,s = wgt_idx[ff]
 
-    # count the number of conflicts
+                    x = w - r + pad
+                    y = h - s + pad 
+                    print 'h,w',h,w,'r,s',r,s,'->',x,y,
+                    if x in range(X) and y in range(Y):
+                        print 'valid',
+                        mult_count += 1
+                        if mode == 'compute':
+                            out_data[x,y] += act_data[ii] * wgt_data[ff] 
+                        # map to accumulators
+                        acc_idx = map_accumulator(x,y,X,Y,2*F*I)
+                        acc[acc_idx] += 1
+                        print acc_idx
+                    else:
+                        print ''
+            warp_time = acc.max()
+            time += warp_time
+            count += warp_count
+    
+            print 'time',warp_time
 
-    return time
+    print 'time', time
+    print 'warp', warp_count, 
+    print 'valid mults', mult_count, 
+    print 'conflict stalls', float(warp_count) / time
+    print 'utilization', float(mult_count) / (warp_count * I * F)
 
-def schedule_act_local(act_data, wgt_data, dims, config, trace_params):
-    (N,C,K,H,W,R,S,X,Y) = dims
-    stride = trace_params['stride']
-    pad = trace_params['pad']
+
+    if mode == 'compute':
+        print out_data
+
+    if mode == 'compute':
+        return out_data
+    else: 
+        return time, warp_count, mult_count
+
+def verify_comp():
+
+    (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = \
+    (1,1,1,1,4,4,3,3,4,4,1,1)
+
+    dims = (N,C,Ck,K,H,W,R,S,X,Y,stride,pad)
+    config = get_default_config()
+    ad = np.random.randint(1,10,(H,W))
+    wd = np.random.randint(1,10,(R,S))
+    ad = sparsify(ad)
+    wd = sparsify(wd)
+    ref = scipy.signal.convolve2d(ad,wd[::-1,::-1].T,mode='same').T
+    out = process_tile(ad, wd, config, dims, mode='compute')
+    print out
+    print ref
+    if (out - ref).any():
+        print 'FAIL output does not match reference convolution'
+    else:
+        print 'PASS'
+
+
+def schedule_act_local(act_data, wgt_data, dims, config):
+    (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
     print 'W', W
     print 'H', H
     total_time = 0
     for n in range(N):
         for k in range(K):
+            print "FIXME"
+            sys.exit(1)
+            # FIXME: channel tiling for alexnet two towers
             for c in range(C):
                 times = []
 
@@ -114,6 +204,22 @@ def schedule_act_local(act_data, wgt_data, dims, config, trace_params):
 
                 total_time += max(times)
 
+def pad_1d(d, t):
+    ''' pad d to a multiple of t '''
+    pad_shape = list(d.shape)
+    pad_shape[0] = roundup_to_multiple(pad_shape[0],t)
+    d_pad = np.zeros(pad_shape).astype(d.dtype)
+    d_pad[:d.shape[0]]  = d
+    return d_pad
+
+def pad_2d(d, t):
+    ''' pad d to a multiple of t '''
+    pad_shape = list(d.shape)
+    pad_shape[0] = roundup_to_multiple(pad_shape[0],t)
+    d_pad = np.zeros(pad_shape).astype(d.dtype)
+    d_pad[:d.shape[0],:]  = d
+    return d_pad
+
 def pad_weights(w, dim0):
     ''' pad weights to fit in the SBs of DaDianNao, also converts fc weights to 4D '''
     ws = list(w.shape)
@@ -127,26 +233,28 @@ def pad_weights(w, dim0):
     return w_pad
 
 def schedule_wgt_local(act_data, wgt_data, dims, config, trace_params):
-    (N,C,K,H,W,R,S,X,Y) = dims
+    (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
     stride = trace_params['stride']
     pad = trace_params['pad']
     Kt = config['Kt']
 
     total_time = 0
     wgt_pad = pad_weights(wgt_data, Kt)
-    for n in range(N):
-        for c in range(C):
-            for kt in range(0,K,Kt):
-                times = []
-                for k in range(kt, kt+Kt):
-                    print n,c,k
-                    act = act_data[n,c]
-                    wgt = wgt_data[k,c]
-                    times.append( process_tile(act,wgt) )
-                    print 'debug exit'
-                    sys.exit()
+    # for n in range(N):
+    for n in range(1):
+        for ct in range(0,C,Ck):
+            for ck in range(Ck):
+                print n,ct+ck,ck
+                for kt in range(0,K,Kt):
+                    times = []
+                    for k in range(kt, kt+Kt):
+                        act = act_data[n,ct+ck]
+                        wgt = wgt_data[k,ck]
+                        times.append( process_tile(act,wgt,config, dims) )
+                        # print 'debug exit'
+                        # sys.exit()
 
-                total_time += max(times)
+                    # total_time += max(times)
 
 if __name__ == '__main__':
 
@@ -166,7 +274,6 @@ if __name__ == '__main__':
         sys.exit(0)
 
     print 'simulating layer', layer, 'batch', batch
-    B
 
     act_data = np.load(args.act_trace)
     wgt_filename = os.path.join(trace_dir,'wgt-%s.npy'%(layer))
@@ -176,7 +283,7 @@ if __name__ == '__main__':
     
     N,C,X,Y     = act_data.shape
     K,Ck,R,S    = wgt_data.shape
-    assert C == Ck, "channel depth does not match: act=%s wgt=%s"%(act_data.shape,wgt_data.shape)
+    # assert C == Ck, "channel depth does not match: act=%s wgt=%s"%(act_data.shape,wgt_data.shape)
     
     stride = trace_params['stride']
     pad = trace_params['pad']
@@ -186,7 +293,7 @@ if __name__ == '__main__':
 
     config = get_default_config()
 
-    dims = (N,C,K,H,W,R,S,X,Y)
+    dims = (N,C,Ck,K,H,W,R,S,X,Y,stride,pad)
 
     schedule_wgt_local(act_data, wgt_data, dims, config, trace_params)
 
