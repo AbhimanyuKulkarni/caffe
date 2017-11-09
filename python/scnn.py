@@ -85,18 +85,18 @@ def process_tile(act_data, wgt_data, config, dims, mode='time'):
     wgt_data = wgt_data.reshape(wgtsize)
     act_idx = act_idx.reshape((actsize,-1))
     wgt_idx = wgt_idx.reshape((wgtsize,-1))
-    print act_data
-    print act_idx.T
-    print wgt_data
-    print wgt_idx.T
+    # print act_data
+    # print act_idx.T
+    # print wgt_data
+    # print wgt_idx.T
 
     # deparsify
     wgt_data, wgt_idx = desparsify(wgt_data,wgt_idx)
     act_data, act_idx = desparsify(act_data,act_idx)
-    print act_data
-    print act_idx.T
-    print wgt_data
-    print wgt_idx.T
+    # print act_data
+    # print act_idx.T
+    # print wgt_data
+    # print wgt_idx.T
 
     # chunk into 4
     F,I = [config[k] for k in ['F','I']]
@@ -121,30 +121,30 @@ def process_tile(act_data, wgt_data, config, dims, mode='time'):
 
                     x = w - r + pad
                     y = h - s + pad 
-                    print 'h,w',h,w,'r,s',r,s,'->',x,y,
+                    # print 'h,w',h,w,'r,s',r,s,'->',x,y,
                     if x in range(X) and y in range(Y):
-                        print 'valid',
+                        # print 'valid',
                         mult_count += 1
                         if mode == 'compute':
                             out_data[x,y] += act_data[ii] * wgt_data[ff] 
                         # map to accumulators
                         acc_idx = map_accumulator(x,y,X,Y,2*F*I)
                         acc[acc_idx] += 1
-                        print acc_idx
-                    else:
-                        print ''
+                        # print acc_idx
             warp_time = acc.max()
             time += warp_time
             count += warp_count
     
-            print 'time',warp_time
+            # print 'time',warp_time
 
-    print 'time', time
-    print 'warp', warp_count, 
-    print 'valid mults', mult_count, 
-    print 'conflict stalls', float(warp_count) / time
-    print 'utilization', float(mult_count) / (warp_count * I * F)
+    # print 'time', time
+    # print 'warp', warp_count, 
+    # print 'valid mults', mult_count, 
+    # print 'conflict stalls', float(warp_count) / time
+    # print 'utilization', float(mult_count) / (warp_count * I * F)
 
+    idle_brick = warp_count * I * F - mult_count
+    idle_conflict = (time - warp_count) * I * F
 
     if mode == 'compute':
         print out_data
@@ -152,7 +152,7 @@ def process_tile(act_data, wgt_data, config, dims, mode='time'):
     if mode == 'compute':
         return out_data
     else: 
-        return time, warp_count, mult_count
+        return time, mult_count, idle_brick, idle_conflict
 
 def verify_comp():
 
@@ -173,7 +173,6 @@ def verify_comp():
         print 'FAIL output does not match reference convolution'
     else:
         print 'PASS'
-
 
 def schedule_act_local(act_data, wgt_data, dims, config):
     (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
@@ -237,29 +236,58 @@ def schedule_wgt_local(act_data, wgt_data, dims, config, trace_params):
     stride = trace_params['stride']
     pad = trace_params['pad']
     Kt = config['Kt']
+    I = config['I']
+    F = config['F']
 
-    total_time = 0
+    time = 0
+    mults = 0
+    idle_bricks = 0
+    idle_conflicts = 0
+    idle_pe = 0
     wgt_pad = pad_weights(wgt_data, Kt)
-    # for n in range(N):
-    for n in range(1):
+    for n in range(N):
+        # tiling channels for two towers alexnet
         for ct in range(0,C,Ck):
             for ck in range(Ck):
                 print n,ct+ck,ck
+
+                # process Kt filters in parallel on Kt PEs
                 for kt in range(0,K,Kt):
                     times = []
+
+                    # distribute work to PEs
                     for k in range(kt, kt+Kt):
                         act = act_data[n,ct+ck]
                         wgt = wgt_data[k,ck]
-                        times.append( process_tile(act,wgt,config, dims) )
+                        t, mc, ib, ic = process_tile(act,wgt,config, dims)
+                        times.append(t)
+                        mults += mc
+                        idle_bricks += ib
+                        idle_conflicts += ic
                         # print 'debug exit'
                         # sys.exit()
 
-                    # total_time += max(times)
+                    # this is chip sync
+                    maxtime = max(times)
+                    ip = (maxtime - np.array(times)).sum() * I * F
+                    idle_pe += ip
+                    time += maxtime
+    
+    print 'time', time 
+    print 'mults         ', mults 
+    print 'idle_bricks   ', idle_bricks 
+    print 'idle_conflicts', idle_conflicts 
+    print 'idle_pe       ', idle_pe
+    tot = mults + idle_bricks + idle_conflicts + idle_pe
+    print 'total mult cycles', tot
+    print 'sanity', tot/1024
+
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(prog='scnn.py', description='Performance Model of SCNN')
     parser.add_argument('act_trace', type=str, help='network name in model directory. \'all\' to run all networks')
+    parser.add_argument('--short', action='store_true', help='run one image and one channel')
     args = parser.parse_args()
 
     try:
@@ -283,6 +311,13 @@ if __name__ == '__main__':
     
     N,C,X,Y     = act_data.shape
     K,Ck,R,S    = wgt_data.shape
+
+    if args.short:
+        N = 1
+
+    
+    wgt_data = sparsify(wgt_data,p=0.25)
+
     # assert C == Ck, "channel depth does not match: act=%s wgt=%s"%(act_data.shape,wgt_data.shape)
     
     stride = trace_params['stride']
