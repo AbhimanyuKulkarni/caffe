@@ -16,7 +16,7 @@
 
 #define GEN_HISTO 0
 #define COUNT_DATA 0
-#define COUNT_ZEROS 1
+#define COUNT_ZEROS 0
 #define PRINT_STATS 0
 #define ZERO_HISTO 0
 
@@ -176,11 +176,29 @@ namespace caffe {
           const boost::shared_ptr<Blob<Dtype> > w = weights[0];
           count_w = w->count();
           LOG(INFO) << "weightshape (name,n,c,h,w):" << name << "," << type << "," <<  w->num() << "," <<  w->channels() << "," <<  w->height() << "," <<  w->width();
+
+          Dtype max = std::numeric_limits<Dtype>::min();
+          Dtype min = std::numeric_limits<Dtype>::max();
+          int count = weights[0]->count();
+          Dtype* weight = weights[0]->mutable_cpu_data();
+          for (int i=0; i < count; i++){
+            if (weight[i] > max){
+              max = weight[i];
+            }
+            if (weight[i] < min){
+              min = weight[i];
+            }
+          }
+          LOG(INFO) << "max (name,size):" << name << "," << max ;
+          LOG(INFO) << "min (name,size):" << name << "," << min ;
         }
 
         LOG(INFO) << "datasize (name,datain,dataout,data,weight):" << name << "," << count_d << ", " << count_do << "," << count_d + count_do << "," << count_w;
         LOG(INFO) << "bottomsize (name,size):" << name << "," <<  bottom.size();
         LOG(INFO) << "topsize (name,size):" << name << "," <<  top.size();
+        
+        
+        
       }
 #endif
 
@@ -315,6 +333,47 @@ namespace caffe {
   template
     void Approximator<double>::pre_layer ( const vector<Blob<double>*> & bottom, const vector<Blob<double>*> & top, vector<shared_ptr<Blob<double> > > & weights, LayerParameter & param);
 
+  template <typename Dtype>
+    void Approximator<Dtype>::pre_layer_back (
+        const vector<Blob<Dtype>*> & bottom, 
+        const vector<Blob<Dtype>*> & top,
+        vector<shared_ptr<Blob<Dtype> > > & weights,
+        LayerParameter & param
+        ) 
+    {
+
+      // limit data magnitude
+      if (    param.has_max_diff_mag()
+          &&  param.has_diff_precision()
+         ) {
+        int mag = param.max_diff_mag();
+        int prec = param.diff_precision();
+        for (int bottom_id = 0; bottom_id < bottom.size(); ++bottom_id) {
+          const int count = bottom[bottom_id]->count();
+          Dtype* data = bottom[bottom_id]->mutable_cpu_diff();
+          limit_mag_prec (data, count, mag, prec); 
+        }
+      } else if (param.has_max_diff_mag()) {
+        int mag = param.max_diff_mag();
+        for (int bottom_id = 0; bottom_id < bottom.size(); ++bottom_id) {
+          const int count = bottom[bottom_id]->count();
+          Dtype* data = bottom[bottom_id]->mutable_cpu_diff();
+          limit_mag (data, count, mag);
+        }
+      } else if (param.has_diff_precision()){
+        int prec = param.diff_precision();
+        for (int bottom_id = 0; bottom_id < bottom.size(); ++bottom_id) {
+          const int count = bottom[bottom_id]->count();
+          Dtype* data = bottom[bottom_id]->mutable_cpu_diff();
+          limit_prec (data, count, prec);
+        }
+      }
+
+    } //pre_layer_back ()
+  template
+    void Approximator<float>::pre_layer_back ( const vector<Blob<float>*> & bottom, const vector<Blob<float>*> & top, vector<shared_ptr<Blob<float> > > & weights, LayerParameter & param);
+  template
+    void Approximator<double>::pre_layer_back ( const vector<Blob<double>*> & bottom, const vector<Blob<double>*> & top, vector<shared_ptr<Blob<double> > > & weights, LayerParameter & param);
   // add_error
   // adds error to a list of floating point values
   // in: data
@@ -462,7 +521,7 @@ namespace caffe {
     void Approximator<Dtype>::limit_mag( Dtype * const in, int size, int mag ) {
       int max_val = 1 << mag;
       for (int i=0; i<size; i++){
-        in[i] = (in[i] > max_val)? max_val: in[i];
+        in[i] = (in[i] > max_val-1)? max_val-1: in[i];
         in[i] = (in[i] < -max_val)? -max_val: in[i];
       }
     }
