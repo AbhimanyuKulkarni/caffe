@@ -356,6 +356,8 @@ message LayerParameter {
   optional int32 weight_precision = 139;
   optional uint32 chunk_size = 140;
   optional float prune_data_threshold = 141;
+  optional uint32 max_diff_mag = 142;
+  optional int32 diff_precision = 143;
 }
 
 // Message that stores parameters used to apply transformation
