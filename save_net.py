@@ -220,8 +220,6 @@ else:
         print "Error: %s does not exist" % netpath
         sys.exit()
 
-sys.path.insert(0, '/home/patrick/python')
-
 caffe.set_mode_cpu()
 
 if write_params:
