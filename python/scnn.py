@@ -119,10 +119,17 @@ def desparsify(data, idx):
 
 def map_accumulator(k,x,y,K,X,Y,N):
     ''' map output (x,y) from (X,Y) to one of N accumulator banks '''
-    return (k + K * (x + X * y)) % N
+    # return (k + K * (x + X * y)) % N # k,x,y
+    # return (k + K * (y + Y * x)) % N # k,y,x
+    return ((k & 3) + ((y & 3)<<2) + ((x & 3)<<4))%N
 
-def linearize(data,idx):
+def linearize(data,idx,transpose=False):
     s = data.size
+    if transpose:
+        data = np.swapaxes(data, -3, -2)
+        data = np.swapaxes(data, -2, -1)
+        idx  = np.swapaxes(idx , -4 ,-3)
+        idx  = np.swapaxes(idx , -3 ,-2)
     data = data.reshape(s)
     idx = idx.reshape((s,-1))
     return data, idx
@@ -192,7 +199,7 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
 
     # linearize tile
     act_data, act_idx = linearize(act_data, act_idx)
-    wgt_data, wgt_idx = linearize(wgt_data, wgt_idx)
+    wgt_data, wgt_idx = linearize(wgt_data, wgt_idx, transpose=True)
     if debug:
         print 'linearize:'
         print '',act_data
@@ -214,10 +221,10 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
         print wgt_idx.T
         print ''
 
-    count = 0
     time = 0
     mult_count = 0
     warp_count = 0 # number of IxF cross products
+    idle_conflict = 0
 
     if 1 or mode == 'compute':
         out_data = np.zeros((K,W,H))
@@ -243,7 +250,11 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
                     warp_count += 1
 
                     # each cycle
+                    debug_mapping = False
+                    if debug_mapping: print '######## cycle %d ######'%time
                     acc = np.zeros(2*F*I)
+
+                    
                     for ii in range(i,min(i+I,len(act_d))):
                         for ff in range(f,min(f+F,len(wgt_d))):
                             n,ca,x,y = act_i[ii]
@@ -264,36 +275,14 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
                                 # map to accumulators
                                 acc_idx = map_accumulator(k,w,h,K,W,H,2*F*I)
                                 acc[acc_idx] += 1
-                                # print acc_idx
-                    warp_time = acc.max()
+                                if debug_mapping: print 'k,w,h,idx =',k,w,h,acc_idx
+
+                    warp_time = max(acc.max(),1)
                     time += warp_time
-                    count += warp_count
-
-            # if 1 or mode == 'compute':
-                # wset = set()
-                # hset = set()
-                # for kk in range(Kc):
-                    # for ww in range(W):
-                        # for hh in range(H):
-                            # if out_data[kk,ww,hh] != 0:
-                                # wset.add(ww)
-                                # hset.add(hh)
-                                # # if ww not in range(w1,w2) or hh not in range(h1,h2):
-                                    # # print 'remote', kk,ww,hh
-                # if wset and hset:
-                    # print 'output halo w %d-%d h %d-%d'%(min(wset), max(wset), min(hset), max(hset))
-
-    
-            # print 'time',warp_time
-
-    # print 'time', time
-    # print 'warp', warp_count, 
-    # print 'valid mults', mult_count, 
-    # print 'conflict stalls', float(warp_count) / time
-    # print 'utilization', float(mult_count) / (warp_count * I * F)
+                    idle_conflict += (warp_time-1) * I * F
 
     idle_brick = warp_count * I * F - mult_count
-    idle_conflict = (time - warp_count) * I * F
+    # idle_conflict = (time - warp_count) * I * F
 
     if mode == 'compute':
         return out_data
@@ -379,56 +368,13 @@ def verify_comp(p=0,N=1,C=1,Ck=1,K=1,X=5,R=3,stride=1,pad=0,batch=False):
     else:
         return ad, wd, out
 
-def schedule_wgt_local(act_data, wgt_data, dims, config, trace_params):
-    (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
-    stride = trace_params['stride']
-    pad = trace_params['pad']
-    Kt = config['Kt']
-    I = config['I']
-    F = config['F']
-
-    time = 0
-    mults = 0
-    idle_bricks = 0
-    idle_conflicts = 0
-    idle_pe = 0
-    wgt_pad = pad_weights(wgt_data, Kt)
-    for n in range(N):
-        # tiling channels for two towers alexnet
-        for ct in range(0,C,Ck):
-            for ck in range(Ck):
-                print n,ct+ck,ck
-
-                # process Kt filters in parallel on Kt PEs
-                for kt in range(0,K,Kt):
-                    times = []
-
-                    # distribute work to PEs
-                    for k in range(kt, kt+Kt):
-                        act = act_data[n,ct+ck]
-                        wgt = wgt_data[k,ck]
-                        t, mc, ib, ic = process_tile(act,wgt,config, dims)
-                        times.append(t)
-                        mults += mc
-                        idle_bricks += ib
-                        idle_conflicts += ic
-                        # print 'debug exit'
-                        # sys.exit()
-
-                    # this is chip sync
-                    maxtime = max(times)
-                    ip = (maxtime - np.array(times)).sum() * I * F
-                    idle_pe += ip
-                    time += maxtime
-    
-    print 'time', time 
-    print 'mults         ', mults 
-    print 'idle_bricks   ', idle_bricks 
-    print 'idle_conflicts', idle_conflicts 
-    print 'idle_pe       ', idle_pe
-    tot = mults + idle_bricks + idle_conflicts + idle_pe
-    print 'total mult cycles', tot
-    print 'sanity', tot/1024
+def regression():
+    pas = 0
+    tot = 0
+    for X,R,s,p in [[19,11,4,0],[7,5,1,2],[5,3,1,1],[7,7,2,3],[5,1,1,0],[5,3,1,1],[5,1,2,0]]:
+        pas += verify_comp(p=1,X=X,R=R,stride=s,pad=p,batch=True)
+        tot += 1
+    print 'PASSED %d out of %d tests'%(pas,tot)
 
 def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
     (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
@@ -462,13 +408,14 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
 
     for n in range(N):
 
-        # tiling channels for two towers alexnet
-        for ct in range(0,C,Ck):
-            for ck in range(Ck):
-                if debug: print 'n,ct,ck',n,ct+ck,ck
+        # process Kc filters together 
+        for kc in range(0,K,Kc):
 
-                # process Kc filters together 
-                for kc in range(0,K,Kc):
+            # tiling channels for two towers alexnet
+            for ct in range(0,C,Ck):
+                for ck in range(Ck):
+                    print 'scheduling image %d/%d filter group %d channel %d/%d'%(n,N,kc,ct+ck,C)
+
                     times = []
                     
                     # tile activations across PEs
@@ -497,8 +444,6 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
                             mults += mc
                             idle_bricks += ib
                             idle_conflicts += ic
-                            # print 'debug exit'
-                            # sys.exit()
 
                     # this is chip sync
                     maxtime = max(times)
@@ -506,18 +451,19 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
                     idle_pe += ip
                     time += maxtime
                     
-                    # reslove halos
-                    # compute the areas of the halo regions around a non edge PE
-                    # that is, how many psums need to get transfered
-                    psums = np.outer([R-1-pad,tw,pad],[S-1-pad,th,pad])
-                    psums[1,1] = 0 # this is the number of local outputs
-                    max_psums = psums.max() * min(Kc, K-kc)
-                    
-                    idle_halo += max_psums * Ht*Wt*I*F
-                    time += max_psums
-                # for kc
-            # for ck
-        # for ct
+                # for ck
+            # for ct
+
+            # reslove halos
+            # compute the areas of the halo regions around a non edge PE
+            # that is, how many psums need to get transfered
+            psums = np.outer([R-1-pad,tw,pad],[S-1-pad,th,pad])
+            psums[1,1] = 0 # this is the number of local outputs
+            max_psums = psums.max() * min(Kc, K-kc)
+            
+            idle_halo += max_psums * Ht*Wt*I*F
+            time += max_psums
+        # for kc
     
     print 'time', time 
     print 'mults         ', mults 
@@ -528,6 +474,7 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
     tot = mults + idle_bricks + idle_conflicts + idle_pe + idle_halo
     print 'total_mult_cycles', tot
     print 'sanity (should equal time)', tot/(Ht*Wt*I*F) 
+    return time
 
 def test_schedule(pnz=0, N=1, C=1, Ck=1, K=1, X=5, R=3, stride=1, pad=0, debug=True):
 
@@ -544,7 +491,20 @@ def test_schedule(pnz=0, N=1, C=1, Ck=1, K=1, X=5, R=3, stride=1, pad=0, debug=T
     wd = np.random.randint(1,10,(K,Ck,R,S))
     ad = sparsify(ad, pnz)
     wd = sparsify(wd, pnz)
-    schedule_act_local(ad, wd, dims, config, debug=debug)
+    return schedule_act_local(ad, wd, dims, config, debug=debug)
+
+def test_scaling():
+    ps = np.arange(0.1,1.1,0.1)
+    times = []
+    for p in ps:
+        times.append( test_schedule(pnz=p, X=16, C=16, Ck=16, K=16, R=3, stride=1, pad=0, debug=False) )
+    return ps, times
+
+def plot_scaling(ps, times):
+    times = np.array(times)
+    times = times/times[-1]
+    plt.plot(ps,times)
+
 
 
 if __name__ == '__main__':
