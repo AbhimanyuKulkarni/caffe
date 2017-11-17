@@ -56,6 +56,7 @@ def pad_4d(d, dim, size):
 
 def sparsify(d, p=0.5):
     ''' keep element with probability p, otherwise 0 '''
+    np.random.seed(1337)
     return d * np.random.binomial(1, p, d.shape)
 
 def get_default_config():
@@ -121,7 +122,11 @@ def map_accumulator(k,x,y,K,X,Y,N):
     ''' map output (x,y) from (X,Y) to one of N accumulator banks '''
     # return (k + K * (x + X * y)) % N # k,x,y
     # return (k + K * (y + Y * x)) % N # k,y,x
-    return ((k & 3) + ((y & 3)<<2) + ((x & 3)<<4))%N
+    # return ((k & 3) + ((y & 3)<<2) + ((x & 3)<<4))%N # 7307
+    # return (k^(x<<3)^(y<<2))%N # 5103
+    # return (k^(x<<4)^(y<<2))%N # 3953
+    # return (k^(x*17)^(y*5))%N # 7762
+    return ( ((x & 1)<<4) + ((y & 1)<<3) + (k & 7) ) % N # x0y0k2k1k0
 
 def linearize(data,idx,transpose=False):
     s = data.size
@@ -187,39 +192,13 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
     h2 = h1 + th
     if debug: print 'output region %d-%d %d-%d'%(w1,w2-1,h1,h2-1)
 
-    if debug:
-        print 'input:'
-        print 'act'
-        print '',act_data
-        # print act_idx.T
-        print 'wgt'
-        print '',wgt_data
-        # print wgt_idx.T
-        print ''
-
     # linearize tile
     act_data, act_idx = linearize(act_data, act_idx)
     wgt_data, wgt_idx = linearize(wgt_data, wgt_idx, transpose=True)
-    if debug:
-        print 'linearize:'
-        print '',act_data
-        print act_idx.T
-        print ''
-        print '',wgt_data
-        print wgt_idx.T
-        print ''
 
     # deparsify
     wgt_data, wgt_idx = desparsify(wgt_data,wgt_idx)
     act_data, act_idx = desparsify(act_data,act_idx)
-    if debug:
-        print 'desparsify:'
-        print '',act_data
-        print act_idx.T
-        print ''
-        print '',wgt_data
-        print wgt_idx.T
-        print ''
 
     time = 0
     mult_count = 0
@@ -250,10 +229,14 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
                     warp_count += 1
 
                     # each cycle
+                    # _,c,_,_ = act_i[0]
+                    # debug_mapping = (c == C-1)
                     debug_mapping = False
-                    if debug_mapping: print '######## cycle %d ######'%time
-                    acc = np.zeros(2*F*I)
+                    if debug_mapping: 
+                        print '######## cycle %d ######'%time
+                        out_list.append([])
 
+                    acc = np.zeros(2*F*I)
                     
                     for ii in range(i,min(i+I,len(act_d))):
                         for ff in range(f,min(f+F,len(wgt_d))):
@@ -275,11 +258,15 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
                                 # map to accumulators
                                 acc_idx = map_accumulator(k,w,h,K,W,H,2*F*I)
                                 acc[acc_idx] += 1
-                                if debug_mapping: print 'k,w,h,idx =',k,w,h,acc_idx
+                                if debug_mapping: 
+                                    print 'k,w,h,idx =',k,w,h,acc_idx
+                                    out_list[-1].append([k,w,h])
+                                
 
                     warp_time = max(acc.max(),1)
                     time += warp_time
                     idle_conflict += (warp_time-1) * I * F
+
 
     idle_brick = warp_count * I * F - mult_count
     # idle_conflict = (time - warp_count) * I * F
@@ -288,6 +275,36 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
         return out_data
     else: 
         return time, mult_count, idle_brick, idle_conflict
+
+def test_mapping(out_list, K=16, W=16, H=16, N=32):
+    # map to accumulators
+    conflicts = 0
+    for cycle_list in out_list:
+        acc = [0]*N
+        for e in cycle_list:
+            if e:
+                k,w,h = e
+                acc_idx = map_accumulator(k,w,h,K,W,H,N)
+                acc[acc_idx] += 1
+        c = max(max(acc)-1,0)
+        # if (2 in acc):
+            # print ''.join(['%d'%a for a in acc])
+        if c > 0:
+            print ''
+            print '%d conflicts'%c
+            for e in cycle_list:
+                if e:
+                    k,w,h = e
+                    acc_idx = map_accumulator(k,w,h,K,W,H,N)
+                    if acc[acc_idx] > 1:
+                        s = ' *'
+                    else:
+                        s = ''
+                    print "(%2d %2d %2d) -> %2d %s"%(k,w,h,acc_idx,s)
+            
+        conflicts += max(max(acc)-1,0)
+    print 'total conflicts', conflicts
+
 
 def convolve2d(a,b,stride,pad,debug=False):
     X,Y = a.shape
@@ -491,7 +508,12 @@ def test_schedule(pnz=0, N=1, C=1, Ck=1, K=1, X=5, R=3, stride=1, pad=0, debug=T
     wd = np.random.randint(1,10,(K,Ck,R,S))
     ad = sparsify(ad, pnz)
     wd = sparsify(wd, pnz)
-    return schedule_act_local(ad, wd, dims, config, debug=debug)
+
+    global out_list
+    out_list = []
+    ret = schedule_act_local(ad, wd, dims, config, debug=debug)
+    np.save('out_list.npy',out_list)
+    return ret
 
 def test_scaling():
     ps = np.arange(0.1,1.1,0.1)
@@ -500,10 +522,18 @@ def test_scaling():
         times.append( test_schedule(pnz=p, X=16, C=16, Ck=16, K=16, R=3, stride=1, pad=0, debug=False) )
     return ps, times
 
-def plot_scaling(ps, times):
+def plot_scaling(ax, ps, times):
     times = np.array(times)
-    times = times/times[-1]
-    plt.plot(ps,times)
+    tn = times/times[-1]
+    ax.plot(ps,tn, marker='|')
+    ax.set_title('Perf vs. Density')
+    ax.set_xlabel('Activation and Weight Density')
+    ax.set_ylabel('Latency vs. Dense')
+    ax.grid(True, axis='y')
+    ax.set_xlim(0,1)
+    ax.set_ylim(0,1)
+    print 'density', ' '.join( ['%f'%i for i in ps] )
+    print 'cycles ',' '.join( ['%f'%i for i in times] )
 
 
 
