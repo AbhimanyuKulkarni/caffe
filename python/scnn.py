@@ -4,10 +4,13 @@ import numpy as np
 import scipy.signal
 import os
 import sys
+from subprocess import call
+import glob
 import re
 import argparse
 import yaml
 import csv
+import collections
 
 def roundup_to_multiple(x, m):
     return int(np.ceil( x / float(m))) * m
@@ -66,7 +69,7 @@ def get_default_config():
     Kt: 64
     I: 4
     F: 4
-    Kc: 16
+    Kc: 4096
     """
     config = yaml.load(doc)
     return config
@@ -113,10 +116,24 @@ def gen_random_data():
     return a,w
 
 def desparsify(data, idx):
+    data = np.array(data)
+    idx = np.array(idx)
     nz = np.where(data != 0)
     do = data[nz]
     io = idx[nz]
     return do, io
+
+def split_bits(x,n):
+    l = []
+    for i in range(n):
+        l.append( (x>>i) & 1 )
+    return l
+
+def join_bits(l):
+    x = 0
+    for i in range(len(l)):
+        x += l[i] << i
+    return x
 
 def map_accumulator(k,x,y,K,X,Y,N):
     ''' map output (x,y) from (X,Y) to one of N accumulator banks '''
@@ -126,7 +143,13 @@ def map_accumulator(k,x,y,K,X,Y,N):
     # return (k^(x<<3)^(y<<2))%N # 5103
     # return (k^(x<<4)^(y<<2))%N # 3953
     # return (k^(x*17)^(y*5))%N # 7762
-    return ( ((x & 1)<<4) + ((y & 1)<<3) + (k & 7) ) % N # x0y0k2k1k0
+    # return ( ((x&1)<<4) + ((y&1)<<3) + (k&7) ) % N # x0y0k2k1k0
+    # return ( ((x&1)<<3) + ((y&1)<<2) + (k&3) ) % N # x0y0k2k1k0
+    # x = split_bits(x,5)
+    # y = split_bits(y,5)
+    # k = split_bits(k,5)
+    # return join_bits([ k[2] ^ x[1] ^ y[1], x[0], y[0], k[1], k[0] ])
+    return ( ( ((k&4)<<2) ^ ((x&2)<<3) ^ ((y&2)<<3)  ) + ((x&1)<<3) + ((y&1)<<2) + (k&3) ) 
 
 def linearize(data,idx,transpose=False):
     s = data.size
@@ -180,6 +203,7 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
     (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
 
     Wt, Ht = [config[k] for k in ['Wt','Ht']]
+    F, I, Kc = [config[k] for k in ['F','I','Kc']]
     # W = roundup_to_multiple(W,Wt)
     # H = roundup_to_multiple(H,Ht)
     # K = wgt_data.shape[0]
@@ -196,11 +220,8 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
     act_data, act_idx = linearize(act_data, act_idx)
     wgt_data, wgt_idx = linearize(wgt_data, wgt_idx, transpose=True)
 
-    # deparsify
-    wgt_data, wgt_idx = desparsify(wgt_data,wgt_idx)
-    act_data, act_idx = desparsify(act_data,act_idx)
-
     time = 0
+    dense_time = 0
     mult_count = 0
     warp_count = 0 # number of IxF cross products
     idle_conflict = 0
@@ -214,11 +235,21 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
     for sx in range(stride):
         for sy in range(stride):
             if debug: print 'stride group(%d,%d)'%(sx,sy)
-            act_d, act_i = act_groups[sx][sy]
-            wgt_d, wgt_i = wgt_groups[sx][sy]
+
+            act_d, act_i = (act_groups[sx][sy])
+            wgt_d, wgt_i = (wgt_groups[sx][sy])
+
+            # time to compute dense vectors
+            dense_acts = len(act_d)
+            dense_wgts = len(wgt_d)
+
+            dense_time += np.ceil( float(dense_acts)/I ) * np.ceil( float(dense_wgts)/F )
+
+            # deparsify
+            wgt_d, wgt_i = desparsify(wgt_d,wgt_i)
+            act_d, act_i = desparsify(act_d,act_i)
 
             # chunk into 4
-            F,I,Kc = [config[k] for k in ['F','I','Kc']]
 
             # cycles = roundup_to_multiple(len(act_d),I) * roundup_to_multiple(len(wgt_d),F)
             # mults = len(act_d) * len(wgt_d)
@@ -274,7 +305,7 @@ def process_tile(pe_idx, act_data, wgt_data, act_idx, wgt_idx, config, dims, mod
     if mode == 'compute':
         return out_data
     else: 
-        return time, mult_count, idle_brick, idle_conflict
+        return time, dense_time, mult_count, idle_brick, idle_conflict
 
 def test_mapping(out_list, K=16, W=16, H=16, N=32):
     # map to accumulators
@@ -393,7 +424,7 @@ def regression():
         tot += 1
     print 'PASSED %d out of %d tests'%(pas,tot)
 
-def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
+def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=False):
     (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
     Kt = config['Kt']
     Kc = config['Kc']
@@ -402,9 +433,10 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
     Ht = config['Ht']
     Wt = config['Wt']
 
-    print 'scheduling',config
+    # print 'scheduling',config
 
     time = 0
+    dense_time = 0
     mults = 0
     idle_bricks = 0
     idle_conflicts = 0
@@ -418,7 +450,7 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
     Y = roundup_to_multiple(Y,Ht)
     act_data = pad_4d(act_data, 2, X)
     act_data = pad_4d(act_data, 3, Y)
-    print 'padded act_data to', act_data.shape, 'to fit PE array of %d x %d'%(Wt,Ht)
+    # print 'padded act_data to', act_data.shape, 'to fit PE array of %d x %d'%(Wt,Ht)
 
     act_idx = create_idxmap_4d(act_data)
     wgt_idx = create_idxmap_4d(wgt_data)
@@ -431,9 +463,10 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
             # tiling channels for two towers alexnet
             for ct in range(0,C,Ck):
                 for ck in range(Ck):
-                    print 'scheduling image %d/%d filter group %d channel %d/%d'%(n,N,kc,ct+ck,C)
+                    if progress: print 'scheduling image %d/%d filter group %d channel %d/%d'%(n,N,kc,ct+ck,C)
 
                     times = []
+                    dense_times = []
                     
                     # tile activations across PEs
                     tw = X/Wt
@@ -455,18 +488,21 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
                             wgt     = wgt_data[k1:k2, ck]
                             wgt_i   = wgt_idx [k1:k2, ck]
 
-                            t, mc, ib, ic = process_tile( (pex,pey), act, wgt, act_i, wgt_i, config, dims, debug=debug)
+                            t, dt, mc, ib, ic = process_tile( (pex,pey), act, wgt, act_i, wgt_i, config, dims, debug=debug)
 
                             times.append(t)
+                            dense_times.append(dt)
                             mults += mc
                             idle_bricks += ib
                             idle_conflicts += ic
 
                     # this is chip sync
                     maxtime = max(times)
+                    mdt = max(dense_times)
                     ip = (maxtime - np.array(times)).sum() * I * F
                     idle_pe += ip
                     time += maxtime
+                    dense_time += mdt
                     
                 # for ck
             # for ct
@@ -480,20 +516,25 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False):
             
             idle_halo += max_psums * Ht*Wt*I*F
             time += max_psums
+            dense_time += max_psums
         # for kc
-    
-    print 'time', time 
-    print 'mults         ', mults 
-    print 'idle_bricks   ', idle_bricks 
-    print 'idle_conflicts', idle_conflicts 
-    print 'idle_pe       ', idle_pe
-    print 'idle_halo     ', idle_halo
-    tot = mults + idle_bricks + idle_conflicts + idle_pe + idle_halo
-    print 'total_mult_cycles', tot
-    print 'sanity (should equal time)', tot/(Ht*Wt*I*F) 
-    return time
 
-def test_schedule(pnz=0, N=1, C=1, Ck=1, K=1, X=5, R=3, stride=1, pad=0, debug=True):
+    tot = mults + idle_bricks + idle_conflicts + idle_pe + idle_halo
+    # print 'sanity (should equal time)', tot/(Ht*Wt*I*F) 
+    
+    stats = collections.OrderedDict()
+    stats['time'] = time
+    stats['dense_time'] = dense_time
+    stats['mults'] = mults
+    stats['idle_bricks'] = idle_bricks
+    stats['idle_conflicts'] = idle_conflicts
+    stats['idle_pe'] = idle_pe
+    stats['idle_halo'] = idle_halo
+    stats['total_mult_cycles'] = tot
+
+    return stats
+
+def test_schedule(pnz=1, N=1, C=1, Ck=1, K=1, X=5, R=3, stride=1, pad=0, debug=False):
 
     S = R
     Y = X
@@ -515,12 +556,23 @@ def test_schedule(pnz=0, N=1, C=1, Ck=1, K=1, X=5, R=3, stride=1, pad=0, debug=T
     np.save('out_list.npy',out_list)
     return ret
 
-def test_scaling():
+def test_scaling(X=64, C=1, K=16, R=3, stride=1, pad=0):
     ps = np.arange(0.1,1.1,0.1)
-    times = []
+    stats = []
     for p in ps:
-        times.append( test_schedule(pnz=p, X=16, C=16, Ck=16, K=16, R=3, stride=1, pad=0, debug=False) )
-    return ps, times
+        print 'density', p
+        s = test_schedule(pnz=p, X=X, C=C, Ck=C, K=K, R=R, stride=stride, pad=pad, debug=False) 
+        s['density'] = p
+        stats.append(s)
+    return stats
+
+def print_stats(stats):
+    ks = [k for k in stats[0]]
+    for k in ks:
+        print k,
+        for sd in stats:
+            print sd[k],
+        print ''
 
 def plot_scaling(ax, ps, times):
     times = np.array(times)
@@ -535,7 +587,97 @@ def plot_scaling(ax, ps, times):
     print 'density', ' '.join( ['%f'%i for i in ps] )
     print 'cycles ',' '.join( ['%f'%i for i in times] )
 
+def collect_results(base_dir):
+    ''' 
+    Argument: 
+        base_dir    base_dir/net/act-layer-batch/stdout
+    Returns:
+        stats       stats[net][layer][batch][stat]
+        '''
 
+    stats = collections.OrderedDict()
+    for nd in glob.glob(base_dir + '/*'):
+        if os.path.isdir(nd):
+            net = os.path.basename(nd)
+            print nd, net
+            stats[net] = collections.OrderedDict()
+            for ld in glob.glob(nd + '/*'):
+                if os.path.isdir(ld):
+
+                    if not os.path.exists('%s/stdout'%ld): continue
+                    lines = os.popen('tail -n 8 %s/stdout'%ld).readlines()
+                    if 'time' not in lines[0]:
+                        print 'Warning: expecting time, found ', lines[0]
+                        continue
+
+                    layer_batch = os.path.basename(ld)
+                    _, layer, batch = layer_batch.split('-')
+                    print layer, batch
+
+                    if layer not in stats[net]:
+                        stats[net][layer] = collections.OrderedDict()
+                    stats[net][layer][batch] = collections.OrderedDict()
+
+                    for l in lines:
+                        words = l.split()
+                        stat = words[0]
+                        val = words[-1]
+                        try:
+                            stats[net][layer][batch][stat] = float(val)
+                        except ValueError:
+                            print ld, l
+                            raise ValueError
+                        print stat, val
+    return stats
+
+def sum_stats_per_layer(stats):
+    for net in stats:
+        print ''
+        print net,',',
+        stat_names = []
+        for l in stats[net]:
+            stat_vals = []
+            for b in stats[net][l]:
+                for s in stats[net][l][b]:
+                    if s not in stat_names:
+                        print s,',',
+                        stat_names.append(s)
+                    if stat_names.index(s) >= len(stat_vals):
+                        stat_vals.append(0)
+                    try:
+                        stat_vals[stat_names.index(s)] += float(stats[net][l][b][s])
+                    except IndexError:
+                        print ''
+                        print 'stat_vals', stat_vals
+                        print 'stat_names', stat_names
+                        raise IndexError
+                        
+            print l,',', ' , '.join( ['%.0f'%i for i in stat_vals] )
+
+def sum_stats_per_net(stats):
+    stat_names = []
+    first = 1
+    for net in stats:
+        stat_vals = []
+        for l in stats[net]:
+            for b in stats[net][l]:
+                for s in stats[net][l][b]:
+                    if s not in stat_names:
+                        stat_names.append(s)
+                    if stat_names.index(s) >= len(stat_vals):
+                        stat_vals.append(0)
+                    try:
+                        stat_vals[stat_names.index(s)] += float(stats[net][l][b][s])
+                    except IndexError:
+                        print ''
+                        print 'stat_vals', stat_vals
+                        print 'stat_names', stat_names
+                        raise IndexError
+
+        if first:
+            print ',' + ' , '.join(stat_names)
+            first = 0
+        print net,',', ','.join( ['%f'%i for i in stat_vals] )
 
 if __name__ == '__main__':
 
@@ -569,7 +711,7 @@ if __name__ == '__main__':
     if args.short:
         N = 1
     
-    wgt_data = sparsify(wgt_data,p=0.25)
+    # wgt_data = sparsify(wgt_data,p=0.25)
 
     # assert C == Ck, "channel depth does not match: act=%s wgt=%s"%(act_data.shape,wgt_data.shape)
     
@@ -583,6 +725,10 @@ if __name__ == '__main__':
 
     dims = (N,C,Ck,K,H,W,R,S,X,Y,stride,pad)
 
-    schedule_wgt_local(act_data, wgt_data, dims, config, trace_params)
+    stats = schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=True)
 
+    print 'Simulation Complete'
+    print 'STATS'
+    for s in stats:
+        print s, stats[s] 
 
