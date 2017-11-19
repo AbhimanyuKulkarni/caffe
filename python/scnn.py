@@ -442,6 +442,7 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=F
     idle_conflicts = 0
     idle_pe = 0
     idle_halo = 0
+    halo_transfers = 0
     
     # act_data = pad_4d(act_data, 0, roundup_to_multiple(K,Kc))
 
@@ -513,6 +514,7 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=F
             psums = np.outer([R-1-pad,tw,pad],[S-1-pad,th,pad])
             psums[1,1] = 0 # this is the number of local outputs
             max_psums = psums.max() * min(Kc, K-kc)
+            halo_transfers += psums.sum()
             
             idle_halo += max_psums * Ht*Wt*I*F
             time += max_psums
@@ -531,6 +533,7 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=F
     stats['idle_pe'] = idle_pe
     stats['idle_halo'] = idle_halo
     stats['total_mult_cycles'] = tot
+    stats['halo_transfers'] = halo_transfers
 
     return stats
 
