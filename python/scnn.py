@@ -336,7 +336,6 @@ def test_mapping(out_list, K=16, W=16, H=16, N=32):
         conflicts += max(max(acc)-1,0)
     print 'total conflicts', conflicts
 
-
 def convolve2d(a,b,stride,pad,debug=False):
     X,Y = a.shape
     R,S = b.shape
@@ -424,8 +423,10 @@ def regression():
         tot += 1
     print 'PASSED %d out of %d tests'%(pas,tot)
 
-def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=False):
+def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=True):
     (N,C,Ck,K,H,W,R,S,X,Y,stride,pad) = dims
+    print '(N,C,Ck,K,H,W,R,S,X,Y,stride,pad)'
+    print dims
     Kt = config['Kt']
     Kc = config['Kc']
     I = config['I']
@@ -449,12 +450,13 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=F
     # pad activations to multiple of Ht,Wt
     X = roundup_to_multiple(X,Wt)
     Y = roundup_to_multiple(Y,Ht)
+    tw = X/Wt
+    th = Y/Ht
     act_data = pad_4d(act_data, 2, X)
     act_data = pad_4d(act_data, 3, Y)
     # print 'padded act_data to', act_data.shape, 'to fit PE array of %d x %d'%(Wt,Ht)
 
     act_idx = create_idxmap_4d(act_data)
-    wgt_idx = create_idxmap_4d(wgt_data)
 
     for n in range(N):
 
@@ -470,8 +472,6 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=F
                     dense_times = []
                     
                     # tile activations across PEs
-                    tw = X/Wt
-                    th = Y/Ht
                     for pex in range(Wt):
                         for pey in range(Ht):
                             x1 = pex * tw
@@ -484,10 +484,12 @@ def schedule_act_local(act_data, wgt_data, dims, config, debug=False, progress=F
                             if debug: print 'PE(%2d,%2d) act %d-%d %d-%d' % (pex,pey,x1,x2-1,y1,y2-1)
 
                             # tile activations and weights
-                            act     = act_data[n, ct+ck, x1:x2, y1:y2]
-                            act_i   = act_idx [n, ct+ck, x1:x2, y1:y2]
-                            wgt     = wgt_data[k1:k2, ck]
-                            wgt_i   = wgt_idx [k1:k2, ck]
+                            act     = act_data[n, ct+ck, x1:x2, y1:y2] # get 3d slice [c,x,y]
+                            act_i   = act_idx [n, ct+ck, x1:x2, y1:y2] # get 4d slice [c,x,y,i]
+                            wgt     = wgt_data[k1:k2, ck] # get 3d slice [k,r,s]
+                            wgt_i   = create_idxmap_4d(wgt_data[k1:k2, ck:ck+1])[:,0,:,:,:] # get 4d slice [k,r,s,i]
+                            wgt_i[:,:,:,0] += k1 # add k offset
+                            wgt_i[:,:,:,1] += ck # add c offset
 
                             t, dt, mc, ib, ic = process_tile( (pex,pey), act, wgt, act_i, wgt_i, config, dims, debug=debug)
 
@@ -590,7 +592,50 @@ def plot_scaling(ax, ps, times):
     print 'density', ' '.join( ['%f'%i for i in ps] )
     print 'cycles ',' '.join( ['%f'%i for i in times] )
 
-def collect_results(base_dir):
+def collect_results_zap(base_dir, skip=[]):
+    ''' 
+    Argument: 
+        base_dir    base_dir/net/act-layer-batch/stdout
+    Returns:
+        stats       stats[net][layer][batch][stat]
+        '''
+
+    stats = collections.OrderedDict()
+    for nd in glob.glob(base_dir + '/*'):
+        if os.path.isdir(nd):
+            net = os.path.basename(nd)
+            print nd, 'net = ', net
+            stats[net] = collections.OrderedDict()
+            for ld in glob.glob(nd + '/buf_aware/*'):
+                if 1:
+                    fname = ld
+
+                    if not os.path.exists(fname): 
+                        print 'Warning: file does not exist:',fname
+                        continue
+                    lines = open(fname).readlines()
+                    if not lines:
+                        print 'Warning: file is empty:',fname
+                        continue
+
+                    layer = os.path.basename(ld)
+                    batch = 0
+                    # print layer, batch
+                    if True in [k in layer for k in skip]:
+                        print 'Skipping layer',layer
+                        continue
+
+                    if layer not in stats[net]:
+                        stats[net][layer] = collections.OrderedDict()
+                    stats[net][layer][batch] = collections.OrderedDict()
+
+                    val = lines[-1].split()[-1]
+                    stat = 'time'
+                    stats[net][layer][batch][stat] = float(val)
+
+    return stats
+
+def collect_results(base_dir, skip=[]):
     ''' 
     Argument: 
         base_dir    base_dir/net/act-layer-batch/stdout
@@ -606,20 +651,35 @@ def collect_results(base_dir):
             stats[net] = collections.OrderedDict()
             for ld in glob.glob(nd + '/*'):
                 if os.path.isdir(ld):
+                    fname = '%s/stdout'%ld
 
-                    if not os.path.exists('%s/stdout'%ld): continue
-                    lines = os.popen('tail -n 8 %s/stdout'%ld).readlines()
-                    if 'time' not in lines[0]:
-                        print 'Warning: expecting time, found ', lines[0]
+                    if not os.path.exists(fname): 
+                        print 'Warning: file does not exist:',fname
+                        continue
+                    lines = open(fname).readlines()
+                    if not lines:
+                        print 'Warning: file is empty:',fname
                         continue
 
                     layer_batch = os.path.basename(ld)
                     _, layer, batch = layer_batch.split('-')
-                    print layer, batch
+                    # print layer, batch
+                    if True in [k in layer for k in skip]:
+                        print 'Skipping layer',layer
+                        continue
+
+
 
                     if layer not in stats[net]:
                         stats[net][layer] = collections.OrderedDict()
                     stats[net][layer][batch] = collections.OrderedDict()
+
+                    while lines:
+                        if lines.pop(0) == 'STATS\n':
+                            break
+
+                    if not lines:
+                        print 'Did not find STATS in', fname
 
                     for l in lines:
                         words = l.split()
@@ -630,20 +690,19 @@ def collect_results(base_dir):
                         except ValueError:
                             print ld, l
                             raise ValueError
-                        print stat, val
+                        # print stat, val
     return stats
 
 def sum_stats_per_layer(stats):
     for net in stats:
-        print ''
-        print net,',',
         stat_names = []
-        for l in stats[net]:
+        first = 1
+        for l in sorted(stats[net]):
             stat_vals = []
             for b in stats[net][l]:
                 for s in stats[net][l][b]:
                     if s not in stat_names:
-                        print s,',',
+                        # print s,',',
                         stat_names.append(s)
                     if stat_names.index(s) >= len(stat_vals):
                         stat_vals.append(0)
@@ -654,8 +713,12 @@ def sum_stats_per_layer(stats):
                         print 'stat_vals', stat_vals
                         print 'stat_names', stat_names
                         raise IndexError
+            if first:
+                print ''
+                print ' , '.join([net] + stat_names)
+                first = 0
+            print ' , '.join( [l] + ['%f'%i for i in stat_vals] )
                         
-            print l,',', ' , '.join( ['%.0f'%i for i in stat_vals] )
 
 def sum_stats_per_net(stats):
     stat_names = []
@@ -710,6 +773,35 @@ if __name__ == '__main__':
     
     N,C,X,Y     = act_data.shape
     K,Ck,R,S    = wgt_data.shape
+
+    if Ck == C*X*Y:
+        print 'conv -> fc boundary, reshaping acts'
+        print act_data.shape
+        act_data = act_data.reshape(N,Ck,1,1)
+        print act_data.shape
+        N,C,X,Y     = act_data.shape
+
+    if X==Y==1:
+        print 'fc layer, reshaping'
+        print 'acts'
+        print act_data.shape
+        act_data = pad_4d(act_data, 1, 256)
+        print act_data.shape
+        N,C,X,Y     = act_data.shape
+        act_data = act_data.reshape(N,C/256,16,16)
+        print act_data.shape
+        N,C,X,Y     = act_data.shape
+
+        print 'wgts'
+        print wgt_data.shape
+        wgt_data = pad_4d(wgt_data, 1, 256)
+        print wgt_data.shape
+        K,Ck,R,S    = wgt_data.shape
+        wgt_data = wgt_data.reshape(K,Ck/256,16,16)
+        K,Ck,R,S    = wgt_data.shape
+        print wgt_data.shape
+
+
 
     if args.short:
         N = 1
