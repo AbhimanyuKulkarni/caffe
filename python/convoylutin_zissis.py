@@ -7,6 +7,7 @@ import code
 import argparse
 from google.protobuf import text_format
 import caffe
+import pdb
 
 def check_file(filename):
     assert os.path.isfile(filename), "%s is not a file" % filename
@@ -89,36 +90,45 @@ def fill_holes(sb, lookahead, lookaside, interactive=False):
         
         for i in range(width):
             if sb[r,i] == 0:
-                promoted = 0
-                for l in range(r+1, min(r+lookahead+1, rows)):
-                    if sb[l,i] != 0:
-                        sb[r,i] = sb[l,i] # promote
-                        sb[l,i] = 0
-                        row_chart_temp[0, i] = l + 1
-                        promoted = 1
-                        break 
-                if (promoted == 0) | (lookahead == 0) : 
-                    wrap = 0
-                    for k in range(i+1, min(i+lookaside+1, width)):
-                        if k % 16 == 0: # the first lane of the next adder tree
-                            wrap = 1    # start wrapping 
-                        for l in range(r+1, min(r+lookahead_bound+1, rows)):
-                            if sb[l,k-(wrap*16)] != 0:    # k is offset by negative wrap*16 if wrap = 1, otherwise it retains its value
-                                sb[r,i] = sb[l,k-(wrap*16)] # promote
-                                sb[l,k-(wrap*16)] = 0
-                                promoted = 1
-                                row_chart_temp[0, i] = l + 1
-                                break
-                        if promoted == 1: 
-                            promoted = 0
-                            break 
+                r_p, i_p = promote(sb, lookahead, lookaside, r, i, 16)
+		sb[r, i] = sb[r_p, i_p]
+		sb[r_p, i_p] = 0
         if interactive: raw_input('')
         time += 1
         weights_read += width
         #chart[r + (warp_num*rows) - skips, tile_num*256:tile_num*256 + 256] = row_chart_temp
     # print 'skipped %d rows' % skips
     return time, weights_read
-        
+
+def promote(sb, la, ls, r, i, brick_size):
+    b = i/brick_size
+    bi = i%brick_size
+    rows, columns = sb.shape
+    if(r == rows - 1):
+	return r, i
+    for ci in np.arange(bi+ls, bi, -1)%brick_size:
+	idx = b*brick_size+ci
+	if sb[r + 1,idx] != 0:
+		return r + 1, idx
+    for cr in range(r+1, r+1+la):
+	if cr > rows-1:
+		break
+	if sb[cr,i] != 0:
+		return cr, i
+    return r, i
+    
+def test_promote(la, ls, rows = 3, brick_size=16, bricks_per_row=1):
+    # w = np.random.randint(1,10,(16,16,16))
+    row_size = brick_size * bricks_per_row
+    w = np.repeat([range(1,rows+1)],row_size,axis=0).T
+    w = w.reshape((rows,bricks_per_row,brick_size))
+    w[:,:,12:] = 0 
+    sb = w.reshape(rows,row_size)
+    for x in range(12, 16):
+	print sb
+	r, i = promote(sb, la, ls, 0, x, brick_size)
+	print r, i
+
 def test(w, show=False):
     f0 = w[0:1,:,:,:]
     wr = np.random.randint(0,10,f0.shape)
@@ -130,7 +140,7 @@ def test(w, show=False):
     rows = sb.shape[0]
     print 'processed %d/%d rows'%(t,rows)
 
-def test_conv1(la, ls, rows = 3, brick_size=16, bricks_per_row=16):
+def test_conv1(la, ls, rows = 4, brick_size=16, bricks_per_row=16):
     # w = np.random.randint(1,10,(16,16,16))
     row_size = brick_size * bricks_per_row
     w = np.repeat([range(1,rows+1)],row_size,axis=0).T
@@ -295,7 +305,10 @@ def read_repeated_param(param, default):
     else:
         return default
 
-def test_all_layers(net, sync, lookahead, lookaside, params, windows):
+def get_num_windows(kernel_size, input_size, stride, pad):
+    return (input_size + 2*pad - kernel_size)/stride + 1
+
+def test_all_layers(net, sync, lookahead, lookaside, params):
 
     layer_stats = ','.join( ['LAYER_STATS','','times','stalls','weight_reads'] ) + '\n'
 
@@ -307,30 +320,46 @@ def test_all_layers(net, sync, lookahead, lookaside, params, windows):
     for layer_param in params.layer:
         layer = layer_param.name        
         if layer in banned: continue
+         
 
-        if layer != 'conv1': continue
+        #if layer != 'conv1': continue
         group = 1
         stride = 1
-        if ('Convolution' not in layer_param.type) and ('InnerProduct' not in layer_param.type): continue
+        pad = 0
+        #if ('Convolution' not in layer_param.type) and ('InnerProduct' not in layer_param.type): continue
+	if ('Convolution' not in layer_param.type): continue
+	data = net.blobs[layer].data
+	if len(data.shape) == 2:
+		(K, Ck) = data.shape
+		data = data.reshape(K, Ck, 1,1)
+	
+        (N,C,H,W) = data.shape
         if 'Convolution' in layer_param.type:
             group = layer_param.convolution_param.group
             stride = read_repeated_param(layer_param.convolution_param.stride, 1)
+            pad = read_repeated_param(layer_param.convolution_param.pad, 0)
 
         w = net.params[layer][0].data
         
-        (K,C,H,W) = w.shape
-        if(C == 3 and stride > 1):
+	if len(w.shape) == 2:
+		(K, Ck) = w.shape
+		w = w.reshape(K, Ck, 1,1)
+
+        (K,Ck,R,S) = w.shape
+        num_win = get_num_windows(R, H, stride, pad)
+
+        if(Ck == 3 and stride > 1):
             print 'folding channels'
             w = w.swapaxes(1,3)
             w = pad_4d(w, 2, stride)
-            w = w.reshape(K,W,divide_roundup(H, stride), C*stride)
+            w = w.reshape(K,S,divide_roundup(R, stride), Ck*stride)
             w = w.swapaxes(3,1)
             print w.shape
-            (K,C,H,W) = w.shape
+            (K,Ck,R,S) = w.shape
 
         t, s, w = sync(w, lookahead, lookaside)
 
-        num_win = windows[layer_num]
+        #num_win = windows[layer_num]
         t = t*group*num_win*num_win
         s = s*group*num_win*num_win
         w = w*group*num_win*num_win
@@ -386,22 +415,21 @@ if __name__ == '__main__':
 
     print '\nNOTE: conv times are for ONE WINDOW, need to scale by # windows'
     
-    # mux_inputs = [2,4,8]
-    mux_inputs = [8]
-    file = 'res_tile_buff'
+    mux_inputs = [1, 2,4,8]
+    # mux_inputs = [8]
+    file = './results/alex_tile_buff'
     #windows=np.array([111,56,56,28,28,28,28,28,28,28,28,28,28,28,28,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,7,7,7,7,7,7,7,7,7,7,7,7,1])
     #windows=np.array([55,27,13,13,13,1,1,1])
-    windows=np.array([111,56,56,56,56,56,56,56,56,56,56,27,27,28,28,28,28,28,28,28,28,28,28,28,13,13,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,6,6,7,7,7,7,7,7,7,7,1])
-    print windows.shape
+    #windows=np.array([111,56,56,56,56,56,56,56,56,56,56,27,27,28,28,28,28,28,28,28,28,28,28,28,13,13,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,6,6,7,7,7,7,7,7,7,7,1])
+    #print windows.shape
     banned = ['loss1/conv', 'loss1/fc', 'loss1/classifier', 'loss2/conv', 'loss2/fc', 'loss2/classifier']
     #if 1:
     for mux in mux_inputs:
-        # for la in range(mux):
-        for la in [1]:
+        for la in range(mux):
             ls = mux - 1 - la
             path = file + '_ahead_' + str(la) + '_aside_' + str(ls)
             dump_times = open(path, "w")
-            times = test_all_layers(net, tile_sync_buff, la, ls, net_param, windows)
+            times = test_all_layers(net, tile_sync_buff, la, ls, net_param)
             stall_ratio = times[1]/(times[0] + times[1])
             print >> dump_times, times[3]
             print >> dump_times, 'TILE TIMES:\n', times[0]
