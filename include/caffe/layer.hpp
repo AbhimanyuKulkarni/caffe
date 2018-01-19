@@ -460,6 +460,7 @@ inline void Layer<Dtype>::Backward(const vector<Blob<Dtype>*>& top,
     const vector<Blob<Dtype>*>& bottom) {
   switch (Caffe::mode()) {
   case Caffe::CPU:
+    approximator_.pre_layer_back(bottom, top, this->blobs_, this->layer_param_);
     Backward_cpu(top, propagate_down, bottom);
     break;
   case Caffe::GPU:

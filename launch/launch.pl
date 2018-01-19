@@ -23,19 +23,14 @@ my $run = "$caffeDir/launch/run.sh";
 
 #-------------------------------------------------------------------------------------------
 
-$param = "chunk_size";
-$param = "data_precision";
 $param = "max_data_mag";
-$param = "weight_precision";
-$param = "";
-$param = "prune_data_threshold";
+$param = "data_precision";
 
 $iters      = 100;
 $skip       = 0;
 $batchSize  = 0;    # 0 to use default
 
 my @nets = ("lenet","convnet","alexnet","nin_imagenet","googlenet","vgg_cnn_s","vgg_cnn_m_2048","vgg_19layers");
-my @nets = ("lenet");
 for $net (@nets) {
   $netDir="$modelDir/$net";
 
@@ -47,24 +42,20 @@ for $net (@nets) {
 
   @mags = file2arr("$netDir/$net.pareto");
   @layers = file2arr("$netDir/$net.layers");
-  @mags = ('dummy');
 
   $profile = (file2arr("$netDir/best-mag-error0.csv"))[0];
   die "Error: profile=$profile from $netDir/best-mag-error0.csv\n" if $profile eq "";
+  print "profile: $profile\n";
 
   $batchTitle = "per-layer-bits-custom-mag-$iters";
-  $batchTitle = "per-layer-bits-custom-mag-error0-$iters";
   $batchTitle = "baseline-$iters";
   $batchTitle = "per-layer-$param-$iters";
-  $batchTitle = "test";
+  $batchTitle = "per-layer-bits-custom-mag-error0-$iters";
 
   @values = (1);
 
 #---------------------------------------------------------------------------------------------
 
-  $batchName = "$net-$profile";
-  $batchName = "$net-$batchTitle";
-  $batchDir = $resultDir . "/$batchName";
   $batchDir = $resultDir . "/$batchTitle/$net";
 
   $model = "$caffeDir/models/$net/train_val.prototxt";
@@ -180,7 +171,7 @@ for $net (@nets) {
               my_system("perl set_layer_param.pl $runDir/model.prototxt \"$l\" max_data_mag $mag");
             }
           } elsif ($layer =~ m/custom/ or $batchTitle =~ /custom/) {
-            @val = split /[,-]/,$profile;
+            @val = split /[,-]/, $profile;
             foreach $i (0..$#layers){
               #($mag,$prec) = split /\./, $val[$i];
               $mag = $val[$i];

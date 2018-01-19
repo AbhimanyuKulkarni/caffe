@@ -35,7 +35,8 @@ while (scalar(@ARGV)){
     $net = $runDir;
   }
 
-  $baseline = `cat $caffeDir/models/$net/$net.baseline`;
+  #$baseline = `cat $caffeDir/models/$net/$net.baseline`;
+  $baseline = 1;
   if ($print1d){
     print "net = $net\n";
     print "baseline = $baseline\n";
@@ -51,7 +52,7 @@ while (scalar(@ARGV)){
   # 1. Build hash{layer}{param}
   foreach $file (@files){
     my $accuracy = -1;
-    my $grepStr = "caffe\.cpp.*accuracy";
+    my $grepStr = "caffe\.cpp.*accuracy ";
     $_ = grepFile($grepStr, "$file/stderr");
     chomp;
     /(final accuracy = \d+\.\d+)/;

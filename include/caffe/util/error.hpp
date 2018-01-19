@@ -26,6 +26,13 @@ class Approximator {
       LayerParameter& param
       );
 
+    void pre_layer_back (
+      const vector<Blob<Dtype>*> & bottom, 
+      const vector<Blob<Dtype>*> & top,
+      vector<shared_ptr<Blob<Dtype> > > & weights,
+      LayerParameter& param
+      );
+
     void print_stats( const char * name , LayerParameter & param);
 
     void add_error( Dtype * const in, int size, int type, Dtype error);

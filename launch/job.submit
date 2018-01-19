@@ -1,6 +1,6 @@
 Universe = vanilla
 Getenv = True
-Requirements = ( Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform )
+Requirements = (Activity == "Idle") && ( Arch == "X86_64" ) && regexp( ".*fc16.*", TARGET.CheckpointPlatform )
 Executable = run.sh
 Output = stdout
 Error = stderr
@@ -8,27 +8,346 @@ Log = condor.log
 Rank = (TARGET.Memory*1000 + Target.Mips) + ((TARGET.Activity =?= "Idle") * 100000000) - ((TARGET.Activity =?= "Retiring" ) * 100000000 )
 Notification = error
 Copy_To_Spool = False
-Should_Transfer_Files = yes
-When_To_Transfer_Output = ON_EXIT
-Transfer_Input_Files = ../.skel, /localhome/juddpatr/caffe//launch/run.sh,model.prototxt
-Transfer_Output_Files = run.sh
-InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run1
-Args = 1
+Should_Transfer_Files = no
+#When_To_Transfer_Output = ON_EXIT
+request_memory = 1024
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-00
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
 Queue
 
-InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run10
-Args = 10
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-01
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
 Queue
 
-InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run100
-Args = 100
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-02
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
 Queue
 
-InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run1000
-Args = 1000
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-03
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
 Queue
 
-InitialDir =  /aenao-99/juddpatr/caffe/results/testbatch/run10000
-Args = 10000
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-04
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-05
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-06
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-07
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-08
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-09
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-10
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-11
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-12
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-13
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-14
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-15
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer00-max_data_mag-16
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-00
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-01
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-02
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-03
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-04
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-05
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-06
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-07
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-08
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-09
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-10
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-11
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-12
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-13
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-14
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-15
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer01-max_data_mag-16
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-00
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-01
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-02
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-03
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-04
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-05
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-06
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-07
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-08
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-09
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-10
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-11
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-12
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-13
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-14
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-15
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer02-max_data_mag-16
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-00
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-01
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-02
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-03
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-04
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-05
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-06
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-07
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-08
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-09
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-10
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-11
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-12
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-13
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-14
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-15
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer03-max_data_mag-16
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-00
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-01
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-02
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-03
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-04
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-05
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-06
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-07
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-08
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-09
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-10
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-11
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-12
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-13
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-14
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-15
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
+Queue
+
+InitialDir =  /aenao-99/juddpatr/caffe/results/pre-per-layer-max_data_mag-100/alexnet/layer04-max_data_mag-16
+Args = model.prototxt /localhome/juddpatr/caffe/models/alexnet/weights.caffemodel 100
 Queue
 
