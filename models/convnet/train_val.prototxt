@@ -7,12 +7,14 @@ layer {
   data_param {
 #    source: "examples/cifar10_new/cifar10_train_lmdb"
 #    source: "examples/cifar10/cifar10_train_leveldb"
-    source: "/localhome/apps/src/caffe/datasets/cifar10/cifar10_train_lmdb"
+#    source: "/localhome/apps/src/caffe/datasets/cifar10/cifar10_train_lmdb"
+    source: "/home/ubuntu/caffe/examples/cifar10/cifar10_train_lmdb"
     batch_size: 100
     backend: LMDB
   }
   transform_param {
-    mean_file: "examples/cifar10_new/mean.binaryproto"
+    mean_file: "examples/cifar10/mean.binaryproto"
+#    mean_file: "examples/cifar10_new/mean.binaryproto"
 #    mean_file: "/localhome/apps/src/caffe/datasets/cifar10/mean.binaryproto"
   }
   include: { phase: TRAIN }
@@ -26,12 +28,14 @@ layer {
 #    source: "examples/cifar10_new/cifar10_test_lmdb"
 #    source: "examples/cifar10/cifar10_test_leveldb"
 #    source: "examples/cifar10/cifar10_train_leveldb"
-    source: "/localhome/apps/src/caffe/datasets/cifar10/cifar10_test_lmdb"
+#    source: "/localhome/apps/src/caffe/datasets/cifar10/cifar10_test_lmdb"
+    source: "/home/ubuntu/caffe/examples/cifar10/cifar10_test_lmdb"
     batch_size: 100
     backend: LMDB
   }
   transform_param {
-    mean_file: "examples/cifar10_new/mean.binaryproto"
+    mean_file: "examples/cifar10/mean.binaryproto"
+#    mean_file: "examples/cifar10_new/mean.binaryproto"
 #    mean_file: "/localhome/apps/src/caffe/datasets/cifar10/mean.binaryproto"
   }
   include: { phase: TEST }

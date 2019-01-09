@@ -17,7 +17,8 @@
 #define GEN_HISTO 0
 #define COUNT_DATA 0
 #define COUNT_ZEROS 0
-#define PRINT_STATS 0
+//#define PRINT_STATS 0 #MS
+#define PRINT_STATS 1
 #define ZERO_HISTO 0
 
 namespace caffe {

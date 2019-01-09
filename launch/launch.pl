@@ -15,9 +15,11 @@ usage();
 exit;
 }
 
-my $caffeDir = "/localhome/juddpatr/caffe";
+#my $caffeDir = "/localhome/juddpatr/caffe";
+my $caffeDir = "/home/ubuntu/caffe";
 my $modelDir = "$caffeDir/models";
-my $resultDir = "/aenao-99/juddpatr/caffe/results";
+#my $resultDir = "/aenao-99/juddpatr/caffe/results";
+my $resultDir = "/home/ubuntu/caffe/results";
 
 my $run = "$caffeDir/launch/run.sh";
 
@@ -31,11 +33,14 @@ $skip       = 0;
 $batchSize  = 0;    # 0 to use default
 
 my @nets = ("lenet","convnet","alexnet","nin_imagenet","googlenet","vgg_cnn_s","vgg_cnn_m_2048","vgg_19layers");
+my @nets = ("lenet","convnet","nin_imagenet","bvlc_googlenet","vgg_cnn_s","vgg_cnn_m_2048","vgg_19layers"); #MS: No alexnet, change googlenet to bvlc_
+my @nets = ("lenet","convnet","nin_imagenet","bvlc_googlenet","vgg_cnn_s","vgg_cnn_m_2048","vgg_19layers"); #MS: No alexnet, change googlenet to bvlc_
 for $net (@nets) {
   $netDir="$modelDir/$net";
+  $netDir="$caffeDir/metafiles/$net";
 
   $useFixedPrec = 0;
-  $prec = (file2arr("$netDir/$net.prec"))[0];
+#  $prec = (file2arr("$netDir/$net.prec"))[0]; #MS
 
   $useFixedMag = 0;
   $mag = 2;
@@ -228,8 +233,6 @@ for $net (@nets) {
 
 
 
-
-
 #----------------------------------------------------------------------------------------------
 
 
@@ -239,7 +242,7 @@ for $net (@nets) {
 sub my_system {
   my $cmd = shift(@_);
   if ($test) {
-    print "$cmd\n";
+    print "cmd: $cmd\n";
   } else {
     system ("$cmd") and die "failed to run $cmd";
   }

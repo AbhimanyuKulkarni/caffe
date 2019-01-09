@@ -6,21 +6,26 @@ EXAMPLE=examples/imagenet
 DATA=data/ilsvrc12
 TOOLS=build/tools
 
-<<<<<<< HEAD
-TRAIN_DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/set1/ILSVRC2012_sample_10_5/sample_10_train/
-VAL_DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/set1/ILSVRC2012_sample_10_5/sample_5_val/
-=======
-DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/ILSVRC2012_sample_10_5
+#TRAIN_DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/set1/ILSVRC2012_sample_10_5/sample_10_train/
+#VAL_DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/set1/ILSVRC2012_sample_10_5/sample_5_val/
+#DATA_ROOT=/localhome/apps/src/caffe/datasets/imagenet/ILSVRC2012_sample_10_5
+#
+#TRAIN_DATA_ROOT=$DATA_ROOT/sample_10_train/
+#TRAIN_DATA_LIST=$DATA_ROOT/sample_10_train.txt
+#VAL_DATA_ROOT=$DATA_ROOT/sample_5_val/
+#VAL_DATA_LIST=$DATA_ROOT/sample_5_val.txt
 
-TRAIN_DATA_ROOT=$DATA_ROOT/sample_10_train/
-TRAIN_DATA_LIST=$DATA_ROOT/sample_10_train.txt
-VAL_DATA_ROOT=$DATA_ROOT/sample_5_val/
-VAL_DATA_LIST=$DATA_ROOT/sample_5_val.txt
->>>>>>> 7c8c68eca96cc3284f8dd2e7920b6e254063b65e
+TRAIN_DATA_ROOT=/home/ubuntu/imagenet/train_data/
+VAL_DATA_ROOT=/home/ubuntu/imagenet/val_data/
+DATA_ROOT=/home/ubuntu/imagenet
+
+TRAIN_DATA_LIST=$DATA_ROOT/train.txt
+VAL_DATA_LIST=$DATA_ROOT/val.txt
 
 # Set RESIZE=true to resize the images to 256x256. Leave as false if images have
 # already been resized using another tool.
-RESIZE=false
+#RESIZE=false
+RESIZE=true
 if $RESIZE; then
   RESIZE_HEIGHT=256
   RESIZE_WIDTH=256

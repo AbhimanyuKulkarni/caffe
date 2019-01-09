@@ -3,7 +3,8 @@
 # e.g. alexnet/layer_custom-max_data_mag-10,8,8,8,8
 
 
-$caffeDir = "/localhome/juddpatr/caffe";
+#$caffeDir = "/localhome/juddpatr/caffe";
+$caffeDir = "/home/ubuntu/caffe";
 
 $write          = 0 ;                       # write best profiles to :
 $outputFilename = "profiles_power2.csv" ;
@@ -73,7 +74,7 @@ while (scalar(@ARGV)){
   }
   $net =~ s/\///g;
 
-#  print "net = $net\n";
+  print "net = $net\n";
   $baseline = `cat $caffeDir/models/$net/$net.baseline`;
   @compPerLayer = `cat $caffeDir/models/$net/comp.txt`;
   chomp(@compPerLayer);
@@ -169,7 +170,7 @@ while (scalar(@ARGV)){
   }
   #print "\n";
 }
-
+print "$net\n";
 # write best profiles to file
 if ($threshold){
   $outfile="$caffeDir/models/$net/$outputFilename";
